@@ -1,22 +1,65 @@
-// S4: PDF document generators using pdf-lib
-//
-// Three documents per paid scan:
-//   1. Full Violation Report     — complete axe-core findings with fix guidance
-//   2. Good-Faith Assessment     — summary framed as remediation evidence (NOT compliance cert)
-//   3. Response Letter Template  — lawyer-formatted letter referencing the assessment
-//
-// MANDATORY on every PDF:
-//   "This report is a technical evidence package and does not constitute legal advice.
-//    Consult a qualified attorney for legal guidance."
-//
-// FORBIDDEN on every PDF:
-//   "ADA compliant", "lawsuit-proof", "legally protected", "certified accessible"
-//
-// Coverage disclosure (must appear in every PDF):
-//   "Automated scanning detects approximately 57% of WCAG issues. Manual review required
-//    for complete accessibility assessment."
-//
-// Dependencies: pdf-lib, @pdf-lib/fontkit (from @saas/pdf package for shared generators)
+import {
+  generateEvidencePackage,
+  generateDevGuide,
+  generateMonitoringConfirmation,
+  type EvidenceData,
+  type MonitoringData,
+  type ViolationSummary,
+} from '@saas/pdf'
 
-export {}
-// TODO S4: implement generateReportPDF, generateAssessmentPDF, generateLetterPDF
+export type { EvidenceData, MonitoringData, ViolationSummary }
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface TierPdf {
+  filename: string
+  bytes: Uint8Array
+}
+
+// ─── Tier routing ─────────────────────────────────────────────────────────────
+
+// Returns the set of PDFs to generate for the given tier.
+// basic      → [evidence-package.pdf]
+// premium    → [evidence-package.pdf, developer-guide.pdf]
+// monitoring → [evidence-package.pdf, developer-guide.pdf, monitoring-confirmation.pdf]
+export async function buildPdfsForTier(
+  tier: 'basic' | 'premium' | 'monitoring',
+  evidenceData: EvidenceData,
+  monitoringData?: MonitoringData,
+): Promise<TierPdf[]> {
+  const pdfs: TierPdf[] = []
+
+  // All tiers: evidence package (cover + disclaimer + summary + violations)
+  pdfs.push({
+    filename: 'evidence-package.pdf',
+    bytes: await generateEvidencePackage(evidenceData),
+  })
+
+  // Premium and monitoring: developer remediation guide
+  if (tier === 'premium' || tier === 'monitoring') {
+    pdfs.push({
+      filename: 'developer-guide.pdf',
+      bytes: await generateDevGuide(evidenceData),
+    })
+  }
+
+  // Monitoring only: activation confirmation
+  if (tier === 'monitoring' && monitoringData) {
+    pdfs.push({
+      filename: 'monitoring-confirmation.pdf',
+      bytes: await generateMonitoringConfirmation(monitoringData),
+    })
+  }
+
+  return pdfs
+}
+
+// ─── Upload + signed URL functions ────────────────────────────────────────────
+// Added after Supabase 'ada-pdfs' storage bucket is confirmed created.
+//
+// Manual step required before this code will work:
+//   Supabase Dashboard → Storage → New bucket
+//   Name:   ada-pdfs
+//   Public: NO  (signed URLs only — never expose PDFs publicly)
+//
+// uploadPdfsForPayment() will be implemented here once the bucket is confirmed.
