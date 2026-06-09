@@ -2,106 +2,88 @@
 
 ---
 
-## Last Session: S1 — Scaffold (2026-06-08)
+## Last Session: S2 — Gumroad webhook + DB types (2026-06-09)
 
-**Goal:** Scaffold full monorepo structure, Supabase schema, session management files.
-**Status:** Complete. Zero code executed, zero packages installed. Pure structure.
+**Goal:** Environment setup complete + Gumroad webhook handler + typed Supabase clients.
+**Status:** Complete. Code written and committed. Migration 002 must be run before testing.
 
 ---
 
-## Files Created This Session
+## Files Changed This Session
 
 ```
-package.json                                         ← root npm workspaces config
-.gitignore                                           ← covers .env, node_modules, .next, chromium
-CLAUDE.md                                            ← permanent session rules
-BUSINESS_STATUS.md                                   ← revenue/account tracker
-PROJECT_STATE.md                                     ← this file
-supabase/migrations/001_initial_schema.sql           ← all 6 tables + RLS policies
+apps/ada-tool/.env.local                             ← CREATED (gitignored) — real Supabase keys + GUMROAD_SELLER_ID
+apps/ada-tool/.env.example                          ← Updated — removed Stripe, added Gumroad
+apps/ada-tool/app/api/webhook/gumroad/route.ts      ← NEW — Gumroad POST webhook handler
+packages/db/src/index.ts                            ← Implemented — typed Database interface + service/browser clients
+supabase/migrations/002_payments_gumroad.sql        ← NEW — must be run in Supabase SQL Editor
 
-apps/ada-tool/package.json
-apps/ada-tool/next.config.js                         ← serverExternalPackages for chromium
-apps/ada-tool/tsconfig.json
-apps/ada-tool/.env.example
-apps/ada-tool/vercel.json                            ← 1024MB memory, 60s maxDuration for scan route
-apps/ada-tool/app/layout.tsx
-apps/ada-tool/app/page.tsx
-apps/ada-tool/app/[industry]/page.tsx
-apps/ada-tool/app/api/scan/route.ts
-apps/ada-tool/app/api/checkout/route.ts
-apps/ada-tool/app/api/webhook/stripe/route.ts
-apps/ada-tool/lib/scan.ts                            ← lib/ at app level, NOT inside app/
-apps/ada-tool/lib/score.ts
-apps/ada-tool/lib/pdf/index.ts
-
-apps/shopify-vamp/package.json
-apps/shopify-vamp/next.config.js
-apps/shopify-vamp/tsconfig.json
-apps/shopify-vamp/.env.example
-apps/shopify-vamp/app/layout.tsx
-apps/shopify-vamp/app/page.tsx
-apps/shopify-vamp/app/api/auth/route.ts
-apps/shopify-vamp/app/api/webhooks/disputes/route.ts
-apps/shopify-vamp/app/api/billing/route.ts
-apps/shopify-vamp/lib/vamp.ts                        ← lib/ at app level, NOT inside app/
-apps/shopify-vamp/lib/shopify.ts
-
-packages/ui/package.json + tsconfig.json + src/index.ts
-packages/pdf/package.json + tsconfig.json + src/index.ts
-packages/db/package.json + tsconfig.json + src/index.ts      ← Supabase client stubs
-packages/stripe/package.json + tsconfig.json + src/index.ts  ← Stripe client stub
+CLAUDE.md                                           ← Updated — payment processor is Gumroad, not Stripe
 ```
 
 ---
 
-## Commands Run This Session
+## Migrations Status
 
-- File writes only. No npm install. No git commands (done separately).
+| File | Status |
+|------|--------|
+| 001_initial_schema.sql | ✅ Run — 6 tables created |
+| 002_payments_gumroad.sql | ⚠️ Must be run before testing webhook |
+
+**002 changes:** scan_id nullable, stripe_payment_intent_id → sale_id, tier constraint updated (pro → premium).
+
+---
+
+## Key Architecture Decisions Made
+
+- **Payment processor: Gumroad** (not Stripe). Webhook at `/api/webhook/gumroad`.
+- Gumroad sends `application/x-www-form-urlencoded`. Verified via `seller_id` match.
+- Test purchases (`test=true`) return 200 but skip DB writes.
+- Unknown prices return 200 + skip (prevents Gumroad from retrying forever).
+- `scan_id` is nullable — Gumroad sales arrive before any scan record exists.
+- Payment 500 → Gumroad retries. Email delivery failure → non-fatal, logged only.
 
 ---
 
 ## Current Bugs
 
-None — no code executed yet.
+None known. Code is untested (environment can't reach external APIs — see risks).
 
 ---
 
 ## Remaining Risks
 
-1. **Vercel Pro required before first payment** — Hobby bans commercial use + 10s timeout cap.
-   Do NOT go live on Hobby. Upgrade the day of first payment.
-2. **Supabase 2-project limit** — Create separate projects for ada-tool and shopify-vamp
-   before production. For dev, one project is fine.
-3. **Supabase projects auto-pause after 7 days** — Set up GitHub Actions cron ping after S2.
-4. **SHOPIFY_TOKEN_ENCRYPTION_KEY** — Must be generated and stored in Vercel env vars before S6.
-   Never commit. See apps/shopify-vamp/.env.example for generation command.
-5. **npm install not yet run** — packages/db/src/index.ts has real Supabase import that won't
-   resolve until `npm install` is run. Run after confirming this scaffold is correct.
+1. **Outbound network blocked in this execution environment** — Cannot test Supabase, Gumroad,
+   or any external service from here. All testing must happen locally or post-Vercel-deploy.
+2. **Migration 002 not yet run** — webhook will fail with DB column name mismatch until run.
+3. **Vercel Pro required before live** — Hobby bans commercial use + 10s timeout cap.
+4. **`apps/ada-tool/app/api/webhook/stripe/route.ts`** — dead stub (Stripe not used).
+   Delete it to avoid confusion.
+5. **SHOPIFY_TOKEN_ENCRYPTION_KEY** — Still needed before S6. Generate before then.
 
 ---
 
-## Next Best Action: S2
+## Next Best Action: S3
 
-**Goal:** Make Stripe work end-to-end for ADA Tool.
+**Goal:** WCAG scan endpoint — the free scan that precedes any purchase.
 
 Tasks in order:
-1. `npm install` from repo root (installs all workspace dependencies)
-2. Implement `packages/stripe/src/index.ts`:
-   - `createCheckoutSession({ tier, scanId, email, successUrl, cancelUrl })`
-   - `constructWebhookEvent(rawBody, signature)`
-3. Implement `apps/ada-tool/app/api/checkout/route.ts`:
-   - Parse + validate `{ tier, scanId, email }`
-   - Create Stripe Checkout Session (mode:'payment' for basic/pro, mode:'subscription' for monitoring)
-   - Return `{ checkoutUrl }`
-4. Implement `apps/ada-tool/app/api/webhook/stripe/route.ts`:
-   - Verify signature
-   - Handle `checkout.session.completed`
-   - INSERT payment row
-   - Queue PDF generation (stub for now — PDF builds in S4)
-   - Queue email delivery (stub for now — Resend integrates in S4)
-5. Update `packages/db/src/index.ts` with TypeScript types for `scans` and `payments` tables
-6. Run Supabase SQL migration manually (see instructions below)
-7. Test end-to-end with Stripe test keys
+1. Implement `apps/ada-tool/lib/scan.ts`:
+   - Launch headless Chromium via `@sparticuz/chromium-min` + `puppeteer-core`
+   - Navigate to target URL, inject axe-core, call `axe.run()`
+   - Return `{ violations, incomplete, passes }` from axe
+2. Implement `apps/ada-tool/lib/score.ts`:
+   - Compute weighted score: critical×10, serious×5, moderate×3, minor×1
+   - Normalize to 0–100
+3. Implement `apps/ada-tool/app/api/scan/route.ts`:
+   - POST `{ url: string }`
+   - Validate + sanitize URL (must be http/https, no localhost)
+   - Hash IP for rate limiting (store as `ip_hash`)
+   - Call `lib/scan.ts` → `lib/score.ts`
+   - INSERT into `scans` table via `@saas/db` service client
+   - Return: `{ scanId, score, violations (top 3 for free tier), incomplete count, coverageNote }`
+   - `coverageNote`: "Automated scanning detects approximately 57% of WCAG issues."
+4. Confirm `export const maxDuration = 60` and `export const runtime = 'nodejs'` are in route
+5. Confirm `vercel.json` memory config is correct (1024MB)
 
-**Before starting S2:** Create Supabase project(s) and run the SQL migration. Get SUPABASE_URL,
-ANON_KEY, SERVICE_ROLE_KEY. Get Stripe test keys. Fill in apps/ada-tool/.env.local.
+**Pre-S3 manual step:** Run migration 002 in Supabase SQL Editor.

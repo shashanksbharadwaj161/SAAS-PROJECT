@@ -26,7 +26,7 @@ Pricing: $29/mo via Shopify Billing API (EVERY_30_DAYS recurring).
 |-------|--------|-------|
 | Framework | Next.js 15 App Router | TypeScript strict mode; params/searchParams are Promises in 15 |
 | Database + Auth | Supabase | 500MB DB, 5GB egress, 50K MAU, 2 projects max |
-| Payments (ADA) | Stripe Checkout | mode:'payment' one-time + mode:'subscription' monitoring |
+| Payments (ADA) | Gumroad | Webhook-based. Verify via GUMROAD_SELLER_ID. No Stripe. |
 | Payments (VAMP) | Shopify Billing API | appSubscriptionCreate GraphQL mutation |
 | Email | Resend | 3,000/mo, 100/day hard cap — build queue fail-safe |
 | PDF | pdf-lib | Open source, runs on Vercel Node.js runtime |
