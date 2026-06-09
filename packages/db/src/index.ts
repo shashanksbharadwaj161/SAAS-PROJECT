@@ -7,6 +7,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export interface Database {
   public: {
+    Views: Record<string, never>
+    Functions: Record<string, never>
     Tables: {
       scans: {
         Row: {
@@ -26,6 +28,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['scans']['Insert']>
+        Relationships: []
       }
 
       payments: {
@@ -48,6 +51,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['payments']['Insert']>
+        Relationships: []
       }
 
       email_deliveries: {
@@ -66,6 +70,7 @@ export interface Database {
           sent_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['email_deliveries']['Insert']>
+        Relationships: []
       }
 
       shops: {
@@ -86,6 +91,7 @@ export interface Database {
           updated_at?: string
         }
         Update: Partial<Database['public']['Tables']['shops']['Insert']>
+        Relationships: []
       }
 
       disputes: {
@@ -110,6 +116,7 @@ export interface Database {
           raw_data?: Record<string, unknown>
         }
         Update: Partial<Database['public']['Tables']['disputes']['Insert']>
+        Relationships: []
       }
 
       vamp_snapshots: {
@@ -134,6 +141,7 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['vamp_snapshots']['Insert']>
+        Relationships: []
       }
     }
   }

@@ -10,28 +10,28 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@saas/db": "*",
+    "@saas/pdf": "*",
+    "@saas/stripe": "*",
+    "@saas/ui": "*",
+    "@sparticuz/chromium-min": "^123.0.1",
+    "@supabase/supabase-js": "^2",
+    "axe-core": "^4.12.0",
     "next": "^15",
+    "pdf-lib": "^1.17.1",
+    "puppeteer-core": "^22.15.0",
     "react": "^18",
     "react-dom": "^18",
-    "@saas/ui": "*",
-    "@saas/pdf": "*",
-    "@saas/db": "*",
-    "@saas/stripe": "*",
-    "@supabase/supabase-js": "^2",
-    "stripe": "^16",
     "resend": "^3",
-    "pdf-lib": "^1.17.1",
-    "@pdf-lib/fontkit": "^1.1.1",
-    "puppeteer-core": "^22",
-    "@sparticuz/chromium-min": "^123",
-    "axe-core": "^4"
+    "stripe": "^16"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5",
     "eslint": "^8",
-    "eslint-config-next": "^15"
+    "eslint-config-next": "^15",
+    "typescript": "^5"
   }
 }

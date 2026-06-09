@@ -1,14 +1,33 @@
-// S3: WCAG violation severity scoring
-//
-// Severity weights (per axe-core impact levels):
-//   critical → 10 points per affected node
-//   serious  →  5 points per affected node
-//   moderate →  3 points per affected node
-//   minor    →  1 point  per affected node
-//
-// Score = sum of (weight × nodeCount) for all violations
-// Normalized to 0–100 scale against total checks run
-// Lower score = more accessible
+import type { ViolationResult } from './scan'
 
-export {}
-// TODO S3: implement computeScore(violations: AxeResults['violations']): number
+export interface ViolationSummary {
+  id: string
+  description: string
+  impact: 'critical' | 'serious' | 'moderate' | 'minor' | null
+  nodes_affected: number
+  wcag_criteria: string[]
+}
+
+const IMPACT_DEDUCTION: Record<string, number> = {
+  critical: 20,
+  serious:  10,
+  moderate:  5,
+  minor:     2,
+}
+
+export function calculateScore(violations: ViolationResult[]): number {
+  const deduction = violations.reduce((total, v) => {
+    return total + (IMPACT_DEDUCTION[v.impact ?? ''] ?? 2)
+  }, 0)
+  return Math.max(0, 100 - deduction)
+}
+
+export function toViolationSummary(v: ViolationResult): ViolationSummary {
+  return {
+    id:            v.id,
+    description:   v.description,
+    impact:        v.impact,
+    nodes_affected: v.nodes,
+    wcag_criteria: v.wcagCriteria,
+  }
+}
