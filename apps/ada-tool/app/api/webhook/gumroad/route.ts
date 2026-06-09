@@ -1,4 +1,6 @@
 import { createServiceClient } from '@saas/db'
+import { generatePdfsForTier, type EvidenceData, type MonitoringData } from '../../../../lib/pdf'
+import { sendPdfDelivery } from '../../../../lib/email'
 
 export const runtime = 'nodejs'
 
@@ -6,9 +8,9 @@ type Tier = 'basic' | 'premium' | 'monitoring'
 
 // Gumroad sends prices in cents.
 const PRICE_TO_TIER: Record<number, Tier> = {
-  4900:  'basic',       // $49 — 3 PDFs
-  7900:  'premium',     // $79 — PDFs + dev fix instructions
-  14900: 'monitoring',  // $149 — ongoing monitoring subscription
+  4900:  'basic',       // $49 — evidence package
+  7900:  'premium',     // $79 — evidence package + developer guide
+  14900: 'monitoring',  // $149/mo — all 3 docs + ongoing monitoring
 }
 
 export async function POST(request: Request) {
@@ -68,14 +70,14 @@ export async function POST(request: Request) {
       sale_id: saleId,
       tier,
       email,
-      pdf_urls: {},    // populated by PDF generation job (S4)
+      pdf_urls: {},    // populated below by generatePdfsForTier
     })
     .select('id')
     .single()
 
   if (paymentError) {
     console.error('payments insert error:', paymentError)
-    // Return 500 so Gumroad retries the webhook
+    // Return 500 so Gumroad retries the webhook on DB failure
     return Response.json({ error: 'Database error' }, { status: 500 })
   }
 
@@ -88,8 +90,51 @@ export async function POST(request: Request) {
     })
 
   if (deliveryError) {
-    // Non-fatal: payment recorded, email delivery can be retried separately
+    // Non-fatal: payment recorded, email delivery tracked via logs
     console.error('email_deliveries insert error:', deliveryError)
+  }
+
+  // ── PDF generation + email delivery ──────────────────────────────────────
+  // Wrapped in try/catch — MUST always return 200 to Gumroad.
+  // A non-200 causes Gumroad to retry, creating duplicate payment records.
+  try {
+    // Direct Gumroad purchases have no prior scan. Generate docs with empty
+    // violations. The buyer still gets their evidence package; violations are
+    // populated when they run a scan and we link it to their payment (S9).
+    const evidenceData: EvidenceData = {
+      url:             email,   // no URL available; use email as identifier
+      scanDate:        new Date(),
+      score:           0,
+      tier,
+      violations:      [],
+      passCount:       0,
+      incompleteCount: 0,
+    }
+
+    const monitoringData: MonitoringData | undefined =
+      tier === 'monitoring'
+        ? { url: email, activationDate: new Date(), email }
+        : undefined
+
+    const signedUrls = await generatePdfsForTier(
+      tier,
+      payment.id,
+      evidenceData,
+      monitoringData,
+    )
+
+    await sendPdfDelivery({
+      paymentId: payment.id,
+      email,
+      tier,
+      pdfUrls:   signedUrls,
+      scanScore: 0,
+    })
+
+  } catch (err) {
+    // Pipeline failure is non-fatal to Gumroad. Payment is recorded.
+    // Manual retry possible via /api/generate-pdf (to be added in S9).
+    console.error(`PDF/email pipeline failed for payment ${payment.id}:`, err)
   }
 
   return Response.json({ received: true, payment_id: payment.id })
