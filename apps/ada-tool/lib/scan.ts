@@ -3,8 +3,8 @@
 
 import chromium from '@sparticuz/chromium-min'
 import puppeteer from 'puppeteer-core'
-import axe from 'axe-core'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
+import { resolve as pathResolve } from 'path'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -14,6 +14,30 @@ const SCAN_TIMEOUT_MS = 45_000
 // Set CHROMIUM_PACK_URL to override (e.g. for version pinning).
 const CHROMIUM_DEFAULT_PACK =
   'https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar'
+
+// ─── axe-core source ─────────────────────────────────────────────────────────
+
+// Read axe-core's browser bundle from disk rather than using axe.source from the
+// module import. Next.js/webpack can strip or transform axe.source in production
+// builds, leaving it undefined and causing "Cannot read properties of undefined
+// (reading 'run')" in the browser context. readFileSync bypasses the bundler.
+let _axeSource: string | undefined
+
+function getAxeSource(): string {
+  if (_axeSource) return _axeSource
+  // axe-core is hoisted to monorepo root in npm workspaces.
+  // process.cwd() == apps/ada-tool/ at runtime, so ../../ reaches repo root.
+  const candidates = [
+    pathResolve(process.cwd(), '../../node_modules/axe-core/axe.min.js'),
+    pathResolve(process.cwd(), 'node_modules/axe-core/axe.min.js'),
+  ]
+  const found = candidates.find(existsSync)
+  if (!found) {
+    throw new ScanError('SCAN_FAILED', 'axe-core browser bundle not found in node_modules')
+  }
+  _axeSource = readFileSync(found, 'utf-8')
+  return _axeSource
+}
 
 // ─── Error class ─────────────────────────────────────────────────────────────
 
@@ -191,8 +215,7 @@ export async function scanUrl(url: string): Promise<ScanResult> {
     }
 
     // ── 4. Inject axe-core ─────────────────────────────────────────────────
-    // axe.source is the complete axe-core JS as a string — injects as a <script> tag.
-    await page.addScriptTag({ content: axe.source }).catch((err: Error) => {
+    await page.addScriptTag({ content: getAxeSource() }).catch((err: Error) => {
       throw new ScanError('SCAN_FAILED', `axe injection failed: ${err.message}`)
     })
 
