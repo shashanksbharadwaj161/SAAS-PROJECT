@@ -28,7 +28,7 @@ function getAxeSource(): string {
   // axe.min.js is copied into public/ by the "prebuild" npm script before next build.
   // process.cwd() in Next.js production always returns the app root (apps/ada-tool/),
   // making public/ a stable, reliable path regardless of monorepo structure.
-  const p = pathResolve(process.cwd(), 'public', 'axe.min.js')
+  const p = pathResolve(process.cwd(), 'public', 'axe.js')
   _axeSource = readFileSync(p, 'utf-8')
   return _axeSource
 }
