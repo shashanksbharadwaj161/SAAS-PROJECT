@@ -2,14 +2,35 @@
 
 ---
 
-## Last Session: Render deployment prep (2026-06-10)
+## Last Session: axe-core injection bugfix (2026-06-10)
 
-**Goal:** Prepare ada-tool for deployment on Render (persistent Node.js, no serverless timeout).
-**Status:** Complete. Type-checked clean, committed and pushed.
+**Goal:** Fix "Cannot read properties of undefined (reading 'run')" on Render.
+**Status:** Fixed. Type-checked clean, committed and pushed.
 
 ---
 
 ## Files Changed This Session
+
+```
+apps/ada-tool/lib/scan.ts   ← UPDATED — replaced axe.source with readFileSync-based injection
+```
+
+**Root cause:** `axe.source` (from `import axe from 'axe-core'`) is stripped or left
+undefined by Next.js/webpack when bundling server-side code. The injected `<script>` tag
+received empty content, so `window.axe` was undefined in the browser context.
+
+**Fix:** `getAxeSource()` — lazy cached function that reads `axe.min.js` directly from
+`node_modules` via `readFileSync`. Checks monorepo root (hoisted) then app-local
+`node_modules`. File is cached in-process so it's only read once per server lifetime.
+
+---
+
+## Previous Session: Render deployment prep (2026-06-10)
+
+**Goal:** Prepare ada-tool for deployment on Render (persistent Node.js, no serverless timeout).
+**Status:** Complete. Type-checked clean, committed and pushed.
+
+### Files Changed
 
 ```
 apps/ada-tool/lib/scan.ts   ← UPDATED — Render-aware Chromium detection
