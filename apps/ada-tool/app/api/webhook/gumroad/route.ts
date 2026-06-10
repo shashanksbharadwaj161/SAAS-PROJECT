@@ -1,5 +1,10 @@
 import { createServiceClient } from '@saas/db'
-import { generatePdfsForTier, type EvidenceData, type MonitoringData } from '../../../../lib/pdf'
+import {
+  generatePdfsForTier,
+  type EvidenceData,
+  type MonitoringData,
+  type ViolationSummary,
+} from '../../../../lib/pdf'
 import { sendPdfDelivery } from '../../../../lib/email'
 
 export const runtime = 'nodejs'
@@ -11,6 +16,32 @@ const PRICE_TO_TIER: Record<number, Tier> = {
   4900:  'basic',       // $49 — evidence package
   7900:  'premium',     // $79 — evidence package + developer guide
   14900: 'monitoring',  // $149/mo — all 3 docs + ongoing monitoring
+}
+
+// Shape of violations as stored in scans.raw_results
+interface RawViolation {
+  id: string
+  description: string
+  impact: 'critical' | 'serious' | 'moderate' | 'minor' | null
+  nodes: number
+  wcagCriteria: string[]
+}
+
+interface RawScanResults {
+  violations?: RawViolation[]
+  incomplete?: unknown[]
+  passes?: number
+}
+
+function rawToEvidenceViolations(raw: Record<string, unknown>): ViolationSummary[] {
+  const results = raw as RawScanResults
+  return (results.violations ?? []).map((v) => ({
+    id:            v.id,
+    description:   v.description,
+    impact:        v.impact,
+    nodes_affected: v.nodes,
+    wcag_criteria: v.wcagCriteria,
+  }))
 }
 
 export async function POST(request: Request) {
@@ -30,6 +61,20 @@ export async function POST(request: Request) {
   // stored for debugging / future use
   const _productId   = body.get('product_id')   as string | null
   const _productName = body.get('product_name') as string | null
+
+  // ── Extract scan_id from Gumroad URL parameters ────────────────────────────
+  // Gumroad passes checkout URL params back as a JSON string in url_params.
+  // The scan_id is appended to each checkout link by ScanWidget after a scan.
+  let scanId: string | null = null
+  const urlParamsRaw = body.get('url_params') as string | null
+  if (urlParamsRaw) {
+    try {
+      const urlParams = JSON.parse(urlParamsRaw) as Record<string, string>
+      scanId = urlParams['scan_id'] ?? null
+    } catch {
+      // url_params not valid JSON — no scan_id available
+    }
+  }
 
   // ── Verify seller identity ────────────────────────────────────────────────
   const expectedSellerId = process.env.GUMROAD_SELLER_ID
@@ -67,7 +112,7 @@ export async function POST(request: Request) {
   const { data: payment, error: paymentError } = await db
     .from('payments')
     .insert({
-      scan_id: null,   // no prior scan for direct Gumroad purchases
+      scan_id: scanId,
       sale_id: saleId,
       tier,
       email,
@@ -99,22 +144,46 @@ export async function POST(request: Request) {
   // Wrapped in try/catch — MUST always return 200 to Gumroad.
   // A non-200 causes Gumroad to retry, creating duplicate payment records.
   try {
-    // Direct Gumroad purchases have no prior scan. Generate docs with empty
-    // violations. The buyer still gets their evidence package; violations are
-    // populated when they run a scan and we link it to their payment (S9).
+    // Look up the scan the buyer ran before purchasing, if available.
+    // scanId is appended to the Gumroad checkout URL by ScanWidget and
+    // echoed back in the webhook payload under url_params.
+    let scannedUrl    = 'URL not available'
+    let scanScore     = 0
+    let violations:   ViolationSummary[] = []
+    let passCount     = 0
+    let incompleteCount = 0
+
+    if (scanId) {
+      const { data: scan, error: scanError } = await db
+        .from('scans')
+        .select('url, score, raw_results')
+        .eq('id', scanId)
+        .single()
+
+      if (scanError) {
+        console.warn(`Could not fetch scan ${scanId}: ${scanError.message}`)
+      } else if (scan) {
+        scannedUrl      = scan.url
+        scanScore       = scan.score
+        violations      = rawToEvidenceViolations(scan.raw_results)
+        passCount       = (scan.raw_results as RawScanResults).passes ?? 0
+        incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
+      }
+    }
+
     const evidenceData: EvidenceData = {
-      url:             email,   // no URL available; use email as identifier
-      scanDate:        new Date(),
-      score:           0,
+      url:            scannedUrl,
+      scanDate:       new Date(),
+      score:          scanScore,
       tier,
-      violations:      [],
-      passCount:       0,
-      incompleteCount: 0,
+      violations,
+      passCount,
+      incompleteCount,
     }
 
     const monitoringData: MonitoringData | undefined =
       tier === 'monitoring'
-        ? { url: email, activationDate: new Date(), email }
+        ? { url: scannedUrl, activationDate: new Date(), email }
         : undefined
 
     const signedUrls = await generatePdfsForTier(
@@ -129,7 +198,7 @@ export async function POST(request: Request) {
       email,
       tier,
       pdfUrls:   signedUrls,
-      scanScore: 0,
+      scanScore,
     })
 
   } catch (err) {

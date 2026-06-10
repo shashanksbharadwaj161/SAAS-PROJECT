@@ -314,7 +314,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Executive summary</li>
                 </ul>
                 <a
-                  href={gumroadUrls.basic}
+                  href={`${gumroadUrls.basic}?scan_id=${result.scanId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -366,7 +366,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Before/After code examples</li>
                 </ul>
                 <a
-                  href={gumroadUrls.premium}
+                  href={`${gumroadUrls.premium}?scan_id=${result.scanId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -403,7 +403,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Monitoring Confirmation doc</li>
                 </ul>
                 <a
-                  href={gumroadUrls.monitoring}
+                  href={`${gumroadUrls.monitoring}?scan_id=${result.scanId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
