@@ -42,9 +42,10 @@ export async function POST(request: Request) {
   }
 
   // ── Skip Gumroad test purchases ───────────────────────────────────────────
-  if (isTest === 'true') {
-    return Response.json({ received: true, skipped: true, reason: 'test_purchase' })
-  }
+  // TEMP: allow test purchases for pipeline verification
+  // if (isTest === 'true') {
+  //   return Response.json({ received: true, skipped: true, reason: 'test_purchase' })
+  // }
 
   // ── Validate required fields ──────────────────────────────────────────────
   if (!email || !saleId || !price) {
