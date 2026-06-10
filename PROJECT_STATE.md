@@ -2,9 +2,9 @@
 
 ---
 
-## Last Session: axe-core injection bugfix (2026-06-10)
+## Last Session: axe-core injection — definitive fix (2026-06-10)
 
-**Goal:** Fix "Cannot read properties of undefined (reading 'run')" on Render.
+**Goal:** Definitive fix for axe-core injection failure on Render.
 **Status:** Fixed. Type-checked clean, committed and pushed.
 
 ---
@@ -12,16 +12,20 @@
 ## Files Changed This Session
 
 ```
-apps/ada-tool/lib/scan.ts   ← UPDATED — replaced axe.source with readFileSync-based injection
+apps/ada-tool/package.json  ← UPDATED — added "prebuild" script
+apps/ada-tool/lib/scan.ts   ← UPDATED — getAxeSource() reads from public/axe.min.js
+apps/ada-tool/.gitignore    ← NEW — excludes public/axe.min.js and .next/
 ```
 
-**Root cause:** `axe.source` (from `import axe from 'axe-core'`) is stripped or left
-undefined by Next.js/webpack when bundling server-side code. The injected `<script>` tag
-received empty content, so `window.axe` was undefined in the browser context.
+**Root cause (previous attempt):** `getAxeSource()` tried to resolve `../../node_modules/axe-core/axe.min.js`
+from `process.cwd()`, but `process.cwd()` in Next.js production doesn't reliably return the
+app root when the process is started via a shell `cd` command.
 
-**Fix:** `getAxeSource()` — lazy cached function that reads `axe.min.js` directly from
-`node_modules` via `readFileSync`. Checks monorepo root (hoisted) then app-local
-`node_modules`. File is cached in-process so it's only read once per server lifetime.
+**Definitive fix — prebuild copy:**
+- `prebuild` npm script runs `node -e "...copyFileSync(require.resolve('axe-core/axe.min.js'), 'public/axe.min.js')"` before every `next build`
+- `require.resolve` in the prebuild node script is pure CJS — no bundler, always correct
+- `getAxeSource()` now reads `process.cwd()/public/axe.min.js` — Next.js guarantees `process.cwd()` == app root in production
+- `public/axe.min.js` is in `.gitignore` (generated at build time, not committed)
 
 ---
 
