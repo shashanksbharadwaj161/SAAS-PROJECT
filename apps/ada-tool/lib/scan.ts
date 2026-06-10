@@ -10,8 +10,8 @@ import { existsSync } from 'fs'
 
 const SCAN_TIMEOUT_MS = 45_000
 
-// Chromium pack for Vercel/Lambda cold-start download.
-// Set CHROMIUM_PACK_URL in Vercel env vars to override (e.g. when version pinning).
+// Fallback Chromium pack for serverless cold-start download.
+// Set CHROMIUM_PACK_URL to override (e.g. for version pinning).
 const CHROMIUM_DEFAULT_PACK =
   'https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar'
 
@@ -64,34 +64,50 @@ interface AxeRunOutput {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function resolveExecutablePath(): Promise<string> {
-  const isServerless =
-    typeof process.env.VERCEL !== 'undefined' ||
-    typeof process.env.AWS_LAMBDA_FUNCTION_NAME !== 'undefined'
+// System Chromium paths checked in order. CHROME_EXECUTABLE_PATH overrides all.
+const SYSTEM_CHROME_PATHS = [
+  process.env.CHROME_EXECUTABLE_PATH,
+  '/usr/bin/chromium-browser',          // Debian/Ubuntu (Render default)
+  '/usr/bin/chromium',                  // Alpine / some Ubuntu configs
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',  // macOS dev
+]
 
-  if (isServerless) {
-    // Download + extract chromium pack to /tmp on cold start
-    return chromium.executablePath(
-      process.env.CHROMIUM_PACK_URL ?? CHROMIUM_DEFAULT_PACK,
-    )
+function findSystemChrome(): string | null {
+  for (const p of SYSTEM_CHROME_PATHS) {
+    if (p && existsSync(p)) return p
+  }
+  return null
+}
+
+async function resolveExecutablePath(): Promise<string> {
+  const packUrl = process.env.CHROMIUM_PACK_URL ?? CHROMIUM_DEFAULT_PACK
+
+  // ── Render persistent server ───────────────────────────────────────────────
+  // Render sets RENDER=true automatically. Prefer system Chromium installed
+  // during build (apt-get install -y chromium-browser) — no cold-start download.
+  if (process.env.RENDER) {
+    const sys = findSystemChrome()
+    if (sys) return sys
+    // System Chromium not installed — fall back to pack download.
+    // Add `apt-get install -y chromium-browser` to render.yaml buildCommand
+    // to avoid this path on every server start.
+    return chromium.executablePath(packUrl)
   }
 
-  // Local development: prefer a system Chrome/Chromium installation
-  const localCandidates = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ].filter((p): p is string => typeof p === 'string' && existsSync(p))
+  // ── Serverless (Vercel / AWS Lambda) ──────────────────────────────────────
+  // Download + extract pack to /tmp on cold start; ephemeral filesystem is fine.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return chromium.executablePath(packUrl)
+  }
 
-  if (localCandidates.length > 0) return localCandidates[0]!
+  // ── Local development ─────────────────────────────────────────────────────
+  const sys = findSystemChrome()
+  if (sys) return sys
 
-  // Last resort for local: trigger download anyway (works if /tmp is writable)
-  return chromium.executablePath(
-    process.env.CHROMIUM_PACK_URL ?? CHROMIUM_DEFAULT_PACK,
-  )
+  // Last resort: download pack (works on any writable /tmp)
+  return chromium.executablePath(packUrl)
 }
 
 function mapRule(r: AxeRuleResult): ViolationResult {

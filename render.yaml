@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ada-tool
+    runtime: node
+    buildCommand: apt-get install -y chromium-browser && cd apps/ada-tool && npm install && npm run build
+    startCommand: cd apps/ada-tool && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RENDER
+        value: true

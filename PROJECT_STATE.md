@@ -2,14 +2,28 @@
 
 ---
 
-## Last Session: S5 — Landing page + email delivery + full pipeline (2026-06-09)
+## Last Session: Render deployment prep (2026-06-10)
 
-**Goal:** Wire full purchase pipeline (Gumroad → PDF → email), landing page, 5 SEO industry pages.
-**Status:** Complete. All files written, type-checked clean, committed and pushed.
+**Goal:** Prepare ada-tool for deployment on Render (persistent Node.js, no serverless timeout).
+**Status:** Complete. Type-checked clean, committed and pushed.
 
 ---
 
 ## Files Changed This Session
+
+```
+apps/ada-tool/lib/scan.ts   ← UPDATED — Render-aware Chromium detection
+render.yaml                 ← NEW — Render Blueprint at repo root
+```
+
+---
+
+## Previous Session: S5 — Landing page + email delivery + full pipeline (2026-06-09)
+
+**Goal:** Wire full purchase pipeline (Gumroad → PDF → email), landing page, 5 SEO industry pages.
+**Status:** Complete. All files written, type-checked clean, committed and pushed.
+
+### Files Changed in S5
 
 ```
 apps/ada-tool/lib/email.ts                      ← NEW — Resend email delivery, daily cap guard
@@ -113,10 +127,10 @@ None known. Code is untested live (environment can't reach external APIs — see
 
 ## Remaining Risks
 
-1. **Outbound network blocked in this execution environment** — all testing must happen locally or via Vercel.
-2. **Vercel Pro required before live** — Hobby bans commercial use + 10s timeout cap.
-3. **Direct purchase email has score=0** — users who buy without first scanning see score 0 in email. To fix in S9: add `/api/generate-pdf` route that accepts `scanId` and regenerates with real scan data.
-4. **Resend domain not yet verified** — emails will come from `onboarding@resend.dev` until `RESEND_FROM_EMAIL` is set with a verified domain.
+1. **Outbound network blocked in this execution environment** — all testing must happen locally or on Render.
+2. **Direct purchase email has score=0** — users who buy without first scanning see score 0 in email. Fix in S9: add `/api/generate-pdf` route accepting `scanId` to regenerate with real scan data.
+3. **Resend domain not yet verified** — emails come from `onboarding@resend.dev` until `RESEND_FROM_EMAIL` is set to a verified domain.
+4. **Render build needs system-level access** — `apt-get install -y chromium-browser` in render.yaml buildCommand requires Render's build environment to allow apt; this works on Render's default Ubuntu build image.
 
 ---
 
@@ -145,7 +159,47 @@ Tasks in order:
 
 ---
 
-## Vercel Deployment Instructions (deploy ada-tool now)
+## Render Deployment Instructions (deploy ada-tool now)
+
+1. **Connect repo** in Render Dashboard → New Web Service → connect GitHub repo.
+2. **Render auto-detects** `render.yaml` at repo root and pre-fills settings.
+3. **Set environment variables** in Render Dashboard (Environment tab):
+   ```
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY
+   GUMROAD_SELLER_ID
+   RESEND_API_KEY
+   RESEND_FROM_EMAIL          (set after Resend domain verification)
+   GUMROAD_PRODUCT_BASIC      (e.g. https://shanksbizz.gumroad.com/l/nnaptk)
+   GUMROAD_PRODUCT_PREMIUM    (e.g. https://shanksbizz.gumroad.com/l/ebpqqpk)
+   GUMROAD_PRODUCT_MONITORING (e.g. https://shanksbizz.gumroad.com/l/nnaptk)
+   NEXT_PUBLIC_APP_URL        (set to your .onrender.com URL or custom domain)
+   ```
+4. **Set Gumroad webhook URL**: Gumroad Dashboard → Settings → Advanced → Ping URL:
+   `https://YOUR_SERVICE.onrender.com/api/webhook/gumroad`
+5. **Deploy** — Render runs `apt-get install -y chromium-browser && npm install && npm run build`.
+6. **Verify** the `/api/scan` endpoint with a test URL to confirm Chromium is found at `/usr/bin/chromium-browser`.
+
+### render.yaml summary (repo root)
+
+```yaml
+buildCommand: apt-get install -y chromium-browser && cd apps/ada-tool && npm install && npm run build
+startCommand: cd apps/ada-tool && npm start
+envVars: NODE_ENV=production, RENDER=true (plus secrets set in dashboard)
+```
+
+### Chromium detection order in scan.ts
+
+| Environment | Detection | Path used |
+|-------------|-----------|-----------|
+| Render | `RENDER` env var set | `/usr/bin/chromium-browser` (system) → pack URL fallback |
+| Vercel/Lambda | `VERCEL` or `AWS_LAMBDA_FUNCTION_NAME` | pack URL download to /tmp |
+| Local | none of the above | system paths → pack URL fallback |
+
+---
+
+## Vercel Deployment Instructions (archived — using Render instead)
 
 1. **Upgrade to Vercel Pro** before accepting any payments (Hobby bans commercial use)
 2. **Import the monorepo** to Vercel:
