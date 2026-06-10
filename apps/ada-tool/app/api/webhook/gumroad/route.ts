@@ -62,6 +62,11 @@ export async function POST(request: Request) {
   const _productId   = body.get('product_id')   as string | null
   const _productName = body.get('product_name') as string | null
 
+  // ── Temporary payload logging (remove after scan_id routing is confirmed) ──
+  console.log('WEBHOOK PAYLOAD KEYS:', Object.keys(Object.fromEntries(body)))
+  console.log('URL_PARAMS RAW:', body.get('url_params'))
+  console.log('REFERRER:', body.get('referrer'))
+
   // ── Extract scan_id from Gumroad URL parameters ────────────────────────────
   // Gumroad passes checkout URL params back as a JSON string in url_params.
   // The scan_id is appended to each checkout link by ScanWidget after a scan.
@@ -87,10 +92,9 @@ export async function POST(request: Request) {
   }
 
   // ── Skip Gumroad test purchases ───────────────────────────────────────────
-  // TEMP: allow test purchases for pipeline verification
-  // if (isTest === 'true') {
-  //   return Response.json({ received: true, skipped: true, reason: 'test_purchase' })
-  // }
+  if (isTest === 'true') {
+    return Response.json({ received: true, skipped: true, reason: 'test_purchase' })
+  }
 
   // ── Validate required fields ──────────────────────────────────────────────
   if (!email || !saleId || !price) {
@@ -154,6 +158,8 @@ export async function POST(request: Request) {
     let incompleteCount = 0
 
     if (scanId) {
+      // Primary path: look up the specific scan the buyer ran before purchasing
+      console.log('SCAN LOOKUP: by scan_id', scanId)
       const { data: scan, error: scanError } = await db
         .from('scans')
         .select('url, score, raw_results')
@@ -163,6 +169,26 @@ export async function POST(request: Request) {
       if (scanError) {
         console.warn(`Could not fetch scan ${scanId}: ${scanError.message}`)
       } else if (scan) {
+        scannedUrl      = scan.url
+        scanScore       = scan.score
+        violations      = rawToEvidenceViolations(scan.raw_results)
+        passCount       = (scan.raw_results as RawScanResults).passes ?? 0
+        incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
+      }
+    } else {
+      // Fallback: scan_id was not passed through Gumroad (url_params not echoed).
+      // Use the most recent scan in the last 2 hours as a best-effort match.
+      console.log('SCAN LOOKUP: fallback to recent (no scan_id in url_params)')
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+      const { data: scan } = await db
+        .from('scans')
+        .select('url, score, raw_results')
+        .gte('created_at', twoHoursAgo)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (scan) {
         scannedUrl      = scan.url
         scanScore       = scan.score
         violations      = rawToEvidenceViolations(scan.raw_results)
