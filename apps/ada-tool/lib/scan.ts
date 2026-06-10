@@ -25,17 +25,11 @@ let _axeSource: string | undefined
 
 function getAxeSource(): string {
   if (_axeSource) return _axeSource
-  // axe-core is hoisted to monorepo root in npm workspaces.
-  // process.cwd() == apps/ada-tool/ at runtime, so ../../ reaches repo root.
-  const candidates = [
-    pathResolve(process.cwd(), '../../node_modules/axe-core/axe.min.js'),
-    pathResolve(process.cwd(), 'node_modules/axe-core/axe.min.js'),
-  ]
-  const found = candidates.find(existsSync)
-  if (!found) {
-    throw new ScanError('SCAN_FAILED', 'axe-core browser bundle not found in node_modules')
-  }
-  _axeSource = readFileSync(found, 'utf-8')
+  // axe.min.js is copied into public/ by the "prebuild" npm script before next build.
+  // process.cwd() in Next.js production always returns the app root (apps/ada-tool/),
+  // making public/ a stable, reliable path regardless of monorepo structure.
+  const p = pathResolve(process.cwd(), 'public', 'axe.min.js')
+  _axeSource = readFileSync(p, 'utf-8')
   return _axeSource
 }
 

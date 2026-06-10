@@ -1,0 +1,10 @@
+# Next.js
+.next/
+out/
+
+# Generated at build time — do not commit
+public/axe.min.js
+
+# Env files — never commit secrets
+.env.local
+.env.*.local
