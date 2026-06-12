@@ -14,6 +14,7 @@ export interface Database {
         Row: {
           id: string
           url: string
+          business_name: string | null       // optional, shown on PDF header for legal reference
           raw_results: Record<string, unknown>
           score: number
           ip_hash: string | null
@@ -22,6 +23,7 @@ export interface Database {
         Insert: {
           id?: string
           url: string
+          business_name?: string | null
           raw_results?: Record<string, unknown>
           score: number
           ip_hash?: string | null

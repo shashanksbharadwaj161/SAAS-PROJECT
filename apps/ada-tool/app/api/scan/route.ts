@@ -62,6 +62,13 @@ export async function POST(request: Request) {
 
   const rawUrl = ((body as { url: string }).url).trim()
 
+  // Optional business name — shown on the PDF header for legal reference
+  const rawBusinessName = (body as Record<string, unknown>).businessName
+  const businessName =
+    typeof rawBusinessName === 'string' && rawBusinessName.trim().length > 0
+      ? rawBusinessName.trim().slice(0, 200)
+      : null
+
   // ── 2. Validate URL ───────────────────────────────────────────────────────
   let parsedUrl: URL
   try {
@@ -110,6 +117,7 @@ export async function POST(request: Request) {
     .from('scans')
     .insert({
       url: parsedUrl.toString(),
+      business_name: businessName,
       raw_results: scanResult as unknown as Record<string, unknown>,
       score,
       ip_hash: ipHash,

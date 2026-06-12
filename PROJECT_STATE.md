@@ -2,7 +2,42 @@
 
 ---
 
-## Last Session: axe-core injection — definitive fix (2026-06-10)
+## Last Session: Comprehensive fix session (2026-06-12)
+
+**Goal:** Issues 1–5: scan_id linking, business name field, Claude API enhancement, landing page copy, env var reminder.
+**Status:** Complete. Type-checked clean. Committed and pushed.
+
+### Files Changed This Session
+
+```
+apps/ada-tool/app/_components/ScanWidget.tsx  ← business name input + withScanId() helper + fetch body
+apps/ada-tool/app/api/scan/route.ts           ← accepts + stores businessName (done prior session)
+apps/ada-tool/app/api/webhook/gumroad/route.ts← passes businessName from scan lookup into EvidenceData
+apps/ada-tool/lib/enhance.ts                  ← NEW — enhanceViolations() via claude-haiku-4-5-20251001
+apps/ada-tool/lib/pdf/index.ts                ← calls enhanceViolations() before PDF generation
+apps/ada-tool/app/page.tsx                    ← bear headline, 2 new FAQ entries, WCAG 2.1→2.2
+apps/ada-tool/app/[industry]/page.tsx         ← WCAG 2.1→2.2
+apps/ada-tool/.env.example                    ← ANTHROPIC_API_KEY placeholder added
+packages/pdf/src/index.ts                     ← EvidenceData.businessName + EnhancedViolation type
+                                                 cover page shows Business name, violation cards
+                                                 show plain English + business impact + fix difficulty
+supabase/migrations/003_add_business_name.sql ← ADD COLUMN business_name TEXT to scans
+```
+
+### Manual tasks remaining
+
+1. **Run migration 003_add_business_name.sql** in Supabase SQL Editor (adds `business_name` column to `scans` table)
+2. **Add `ANTHROPIC_API_KEY` to Render environment variables** — required for Claude-enhanced PDF descriptions
+   - Get key from: https://console.anthropic.com → API Keys
+   - Render Dashboard → your ada-tool service → Environment → Add env var
+3. Add `ANTHROPIC_API_KEY` to `.env.local` for local testing
+
+### Issue 1 confirmation
+`/api/scan/route.ts` returns `scanId: saved.id`. ScanWidget appends it to all 3 Gumroad checkout URLs via `withScanId()`. Webhook parses `url_params` JSON from Gumroad payload. All three legs confirmed correct.
+
+---
+
+## Previous Session: axe-core injection — definitive fix (2026-06-10)
 
 **Goal:** Definitive fix for axe-core injection failure on Render.
 **Status:** Fixed. Type-checked clean, committed and pushed.

@@ -34,7 +34,7 @@ const INDUSTRIES: Record<string, IndustryData> = {
       {
         title: 'Inaccessible online menu',
         description:
-          'Menus delivered as PDFs or images (rather than readable HTML text) are often inaccessible to screen reader users. WCAG 2.1 requires information to be available in text form.',
+          'Menus delivered as PDFs or images (rather than readable HTML text) are often inaccessible to screen reader users. WCAG 2.2 requires information to be available in text form.',
       },
       {
         title: 'Non-functional reservation or contact forms',
@@ -401,7 +401,7 @@ export default async function IndustryPage({ params }: Props) {
             color:        '#92400e',
           }}>
             <strong>Coverage note:</strong> Automated scanning with axe-core identifies approximately
-            57% of WCAG 2.1 issues. Manual review by an accessibility specialist is required for
+            57% of WCAG 2.2 issues. Manual review by an accessibility specialist is required for
             a comprehensive assessment.
           </div>
         </div>
@@ -528,7 +528,7 @@ export default async function IndustryPage({ params }: Props) {
           Not legal advice. Not a compliance certification. Consult a qualified attorney.
         </p>
         <p style={{ margin: 0, fontSize: '12px' }}>
-          Automated scanning detects ~57% of WCAG 2.1 issues (axe-core, Deque Systems research).
+          Automated scanning detects ~57% of WCAG 2.2 issues (axe-core, Deque Systems research).
           Manual review required for full assessment.
         </p>
       </footer>

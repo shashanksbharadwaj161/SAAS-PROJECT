@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 const DISCLAIMER =
   "This tool provides a technical assessment of your website's accessibility " +
-  'using axe-core automated scanning, which identifies approximately 57% of WCAG 2.1 issues. ' +
+  'using axe-core automated scanning, which identifies approximately 57% of WCAG 2.2 issues. ' +
   'It does not constitute legal advice and is not a substitute for a qualified attorney. ' +
   'If you received an ADA demand letter, consult a licensed attorney immediately.'
 
@@ -20,11 +20,19 @@ const FAQ = [
   },
   {
     q: 'What does the scan actually check?',
-    a: "We use axe-core, an industry-standard open-source library by Deque Systems. Per Deque's own research across 2,000+ audits and 300,000 issues, automated scanning detects approximately 57% of WCAG 2.1 AA issues. The remaining issues require manual testing by an accessibility specialist.",
+    a: "We use axe-core, an industry-standard open-source library by Deque Systems. Per Deque's own research across 2,000+ audits and 300,000 issues, automated scanning detects approximately 57% of WCAG 2.2 AA issues. The remaining issues require manual testing by an accessibility specialist.",
   },
   {
     q: 'Will this help with my demand letter?',
     a: 'The evidence package documents your WCAG analysis and shows remediation steps taken — this can demonstrate good faith to opposing counsel. How useful it is depends entirely on your specific situation. Ask your attorney how to use it in your response.',
+  },
+  {
+    q: 'Will an accessibility widget protect me?',
+    a: 'No. The FTC fined AccessiBe — one of the most popular accessibility overlay tools — $1 million in 2025 for false compliance claims. 1 in 4 ADA lawsuits in 2025 hit sites already running these widgets. Overlays do not constitute good-faith remediation effort.',
+  },
+  {
+    q: 'What WCAG version do you test against?',
+    a: 'WCAG 2.2, which became the official standard in October 2023 and is the current benchmark courts and plaintiffs reference. Most sites are not yet fully compliant.',
   },
   {
     q: 'What is included in each package?',
@@ -85,11 +93,11 @@ export default function HomePage() {
             Received an ADA demand letter?
           </div>
           <h1 style={{ fontSize: 'clamp(28px,5vw,48px)', fontWeight: '800', margin: '0 0 16px', lineHeight: '1.15' }}>
-            Get Your WCAG Technical<br />Evidence Package
+            You Don&apos;t Have to Be Faster<br />Than the Bear
           </h1>
           <p style={{ fontSize: '18px', color: '#bfdbfe', margin: '0 0 32px', lineHeight: '1.6' }}>
-            Scan your website free. Show documented, good-faith accessibility assessment
-            to your attorney. Packages from $49.
+            Just faster than the other businesses he&apos;s chasing. Dated proof of
+            good-faith effort kills 80% of ADA demand letters.
           </p>
 
           <div style={{ textAlign: 'left', maxWidth: '600px', margin: '0 auto' }}>
@@ -110,7 +118,7 @@ export default function HomePage() {
           </h2>
           <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
             {[
-              { step: '1', title: 'Enter Your URL', body: 'Paste your website address. We run a free WCAG 2.1 scan using axe-core and show you your score and top issues.' },
+              { step: '1', title: 'Enter Your URL', body: 'Paste your website address. We run a free WCAG 2.2 scan using axe-core and show you your score and top issues.' },
               { step: '2', title: 'Review Your Results', body: 'See your accessibility score, the violations found, and how many items passed. The free report shows the top 3 issues.' },
               { step: '3', title: 'Purchase Your Package', body: 'Choose the tier that fits your situation. Pay securely via Gumroad. Your PDF evidence package is emailed within minutes.' },
             ].map(({ step, title, body }) => (
@@ -341,7 +349,7 @@ export default function HomePage() {
           Not legal advice. Not a compliance certification. Consult a qualified attorney.
         </p>
         <p style={{ margin: 0, fontSize: '12px' }}>
-          Automated scanning detects ~57% of WCAG 2.1 issues (axe-core, Deque Systems research).
+          Automated scanning detects ~57% of WCAG 2.2 issues (axe-core, Deque Systems research).
           Manual review required for full assessment.
         </p>
       </footer>

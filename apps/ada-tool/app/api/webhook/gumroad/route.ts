@@ -156,13 +156,14 @@ export async function POST(request: Request) {
     let violations:   ViolationSummary[] = []
     let passCount     = 0
     let incompleteCount = 0
+    let businessName: string | null = null
 
     if (scanId) {
       // Primary path: look up the specific scan the buyer ran before purchasing
       console.log('SCAN LOOKUP: by scan_id', scanId)
       const { data: scan, error: scanError } = await db
         .from('scans')
-        .select('url, score, raw_results')
+        .select('url, score, raw_results, business_name')
         .eq('id', scanId)
         .single()
 
@@ -171,6 +172,7 @@ export async function POST(request: Request) {
       } else if (scan) {
         scannedUrl      = scan.url
         scanScore       = scan.score
+        businessName    = scan.business_name
         violations      = rawToEvidenceViolations(scan.raw_results)
         passCount       = (scan.raw_results as RawScanResults).passes ?? 0
         incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
@@ -182,7 +184,7 @@ export async function POST(request: Request) {
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
       const { data: scan } = await db
         .from('scans')
-        .select('url, score, raw_results')
+        .select('url, score, raw_results, business_name')
         .gte('created_at', twoHoursAgo)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -191,6 +193,7 @@ export async function POST(request: Request) {
       if (scan) {
         scannedUrl      = scan.url
         scanScore       = scan.score
+        businessName    = scan.business_name
         violations      = rawToEvidenceViolations(scan.raw_results)
         passCount       = (scan.raw_results as RawScanResults).passes ?? 0
         incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
@@ -199,6 +202,7 @@ export async function POST(request: Request) {
 
     const evidenceData: EvidenceData = {
       url:            scannedUrl,
+      businessName,
       scanDate:       new Date(),
       score:          scanScore,
       tier,

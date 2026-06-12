@@ -68,14 +68,23 @@ function isValidUrl(raw: string): boolean {
   }
 }
 
+// Appends scan_id to a Gumroad checkout URL. Gumroad echoes checkout URL params
+// back in the webhook payload (url_params), which is how the webhook links the
+// purchase to the scan. Handles URLs that already carry a query string.
+function withScanId(gumroadUrl: string, scanId: string): string {
+  const sep = gumroadUrl.includes('?') ? '&' : '?'
+  return `${gumroadUrl}${sep}scan_id=${encodeURIComponent(scanId)}`
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ScanWidget({ gumroadUrls }: Props) {
-  const [url,       setUrl]       = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [result,    setResult]    = useState<ScanResult | null>(null)
-  const [error,     setError]     = useState<string | null>(null)
-  const resultsRef                = useRef<HTMLDivElement>(null)
+  const [businessName, setBusinessName] = useState('')
+  const [url,          setUrl]          = useState('')
+  const [loading,      setLoading]      = useState(false)
+  const [result,       setResult]       = useState<ScanResult | null>(null)
+  const [error,        setError]        = useState<string | null>(null)
+  const resultsRef                      = useRef<HTMLDivElement>(null)
 
   async function handleScan(e: React.FormEvent) {
     e.preventDefault()
@@ -93,7 +102,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
       const res = await fetch('/api/scan', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url: scanUrl }),
+        body:    JSON.stringify({ url: scanUrl, businessName: businessName.trim() || undefined }),
       })
 
       const data = await res.json() as Record<string, unknown>
@@ -119,7 +128,31 @@ export default function ScanWidget({ gumroadUrls }: Props) {
   return (
     <div>
       {/* ── Scan form ────────────────────────────────────────────────────────── */}
-      <form onSubmit={handleScan} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <form onSubmit={handleScan} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div>
+          <label htmlFor="business-name" style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '4px' }}>
+            Your business name (for the document)
+          </label>
+          <input
+            id="business-name"
+            type="text"
+            value={businessName}
+            onChange={e => setBusinessName(e.target.value)}
+            placeholder="e.g. Joe's Pizza Restaurant"
+            disabled={loading}
+            style={{
+              width:        '100%',
+              padding:      '10px 14px',
+              fontSize:     '15px',
+              border:       '1px solid #d1d5db',
+              borderRadius: '6px',
+              outline:      'none',
+              background:   loading ? '#f3f4f6' : '#fff',
+              boxSizing:    'border-box',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <input
           type="text"
           value={url}
@@ -154,6 +187,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
         >
           {loading ? 'Scanning…' : 'Scan My Site Free'}
         </button>
+        </div>
       </form>
 
       {loading && (
@@ -314,7 +348,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Executive summary</li>
                 </ul>
                 <a
-                  href={`${gumroadUrls.basic}?scan_id=${result.scanId}`}
+                  href={withScanId(gumroadUrls.basic, result.scanId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -366,7 +400,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Before/After code examples</li>
                 </ul>
                 <a
-                  href={`${gumroadUrls.premium}?scan_id=${result.scanId}`}
+                  href={withScanId(gumroadUrls.premium, result.scanId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -403,7 +437,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
                   <li>Monitoring Confirmation doc</li>
                 </ul>
                 <a
-                  href={`${gumroadUrls.monitoring}?scan_id=${result.scanId}`}
+                  href={withScanId(gumroadUrls.monitoring, result.scanId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{

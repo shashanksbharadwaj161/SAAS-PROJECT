@@ -7,6 +7,7 @@ import {
   type ViolationSummary,
 } from '@saas/pdf'
 import { createServiceClient } from '@saas/db'
+import { enhanceViolations } from '../enhance'
 
 export type { EvidenceData, MonitoringData, ViolationSummary }
 
@@ -110,8 +111,12 @@ export async function generatePdfsForTier(
   evidenceData: EvidenceData,
   monitoringData?: MonitoringData,
 ): Promise<string[]> {
+  // Enhance violations with plain-English descriptions via Claude Haiku (best-effort)
+  const enhanced = await enhanceViolations(evidenceData.violations, evidenceData.url)
+  const enrichedData: EvidenceData = { ...evidenceData, enhancedViolations: enhanced }
+
   // 1. Generate PDFs in memory
-  const pdfs = await buildPdfsForTier(tier, evidenceData, monitoringData)
+  const pdfs = await buildPdfsForTier(tier, enrichedData, monitoringData)
 
   // 2. Upload to Supabase Storage, get 7-day signed URLs
   const signedUrls = await uploadPdfsForPayment(paymentId, pdfs)

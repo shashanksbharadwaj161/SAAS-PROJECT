@@ -24,12 +24,22 @@ export interface ViolationSummary {
   wcag_criteria: string[]
 }
 
+export interface EnhancedViolation {
+  originalId:     string
+  plainEnglish:   string
+  businessImpact: string
+  fixDifficulty:  'Easy' | 'Medium' | 'Hard'
+  estimatedTime:  string
+}
+
 export interface EvidenceData {
   url: string
+  businessName?: string | null
   scanDate: Date
   score: number
   tier: 'basic' | 'premium' | 'monitoring'
   violations: ViolationSummary[]
+  enhancedViolations?: EnhancedViolation[]
   passCount: number
   incompleteCount: number
 }
@@ -310,12 +320,19 @@ function buildCoverPage(doc: PDFDocument, fonts: Fonts, data: EvidenceData): voi
     x: ML, y: H - 120, size: 11, font: fonts.regular, color: C.headerSub,
   })
 
-  // URL + date labels (left side of banner, below title)
-  page.drawText('Scanned Website', { x: ML, y: H - 152, size: 8, font: fonts.bold, color: C.headerSub })
+  // Business name + URL + date labels (left side of banner, below title)
+  let infoY = H - 152
+  if (data.businessName) {
+    page.drawText('Business', { x: ML, y: infoY, size: 8, font: fonts.bold, color: C.headerSub })
+    const bName = data.businessName.length > 46 ? `${data.businessName.slice(0, 43)}...` : data.businessName
+    page.drawText(bName, { x: ML, y: infoY - 14, size: 10, font: fonts.bold, color: C.white })
+    infoY -= 32
+  }
+  page.drawText('Scanned Website', { x: ML, y: infoY, size: 8, font: fonts.bold, color: C.headerSub })
   const displayUrl = data.url.length > 46 ? `${data.url.slice(0, 43)}...` : data.url
-  page.drawText(displayUrl, { x: ML, y: H - 166, size: 10, font: fonts.bold, color: C.white })
-  page.drawText('Scan Date', { x: ML, y: H - 186, size: 8, font: fonts.bold, color: C.headerSub })
-  page.drawText(fmtDate(data.scanDate), { x: ML, y: H - 200, size: 10, font: fonts.regular, color: C.white })
+  page.drawText(displayUrl, { x: ML, y: infoY - 14, size: 10, font: fonts.bold, color: C.white })
+  page.drawText('Scan Date', { x: ML, y: infoY - 34, size: 8, font: fonts.bold, color: C.headerSub })
+  page.drawText(fmtDate(data.scanDate), { x: ML, y: infoY - 48, size: 10, font: fonts.regular, color: C.white })
 
   // ── Score circle (right side of banner) ─────────────────────────────────────
   const cx  = W - 105
@@ -556,6 +573,12 @@ function buildViolationPages(doc: PDFDocument, fonts: Fonts, data: EvidenceData,
   const shown   = data.violations.slice(0, 20)
   const hasMore = data.violations.length > 20
 
+  // Build enhanced lookup map keyed by violation id
+  const enhancedMap = new Map<string, EnhancedViolation>()
+  for (const ev of data.enhancedViolations ?? []) {
+    enhancedMap.set(ev.originalId, ev)
+  }
+
   let pageNum = startPage
   let page    = doc.addPage([W, H])
   drawInnerHeader(page, fonts, 'Violations Detail', pageNum)
@@ -569,7 +592,7 @@ function buildViolationPages(doc: PDFDocument, fonts: Fonts, data: EvidenceData,
     page.drawRectangle({ x: ML, y: y - noticeH, width: 4,  height: noticeH, color: C.green })
     page.drawText('No violations detected', { x: ML + 14, y: y - 18, size: 13, font: fonts.bold, color: C.green })
     page.drawText(
-      'The automated scan found no WCAG 2.1 violations. Manual testing is still recommended.',
+      'The automated scan found no WCAG violations. Manual testing is still recommended.',
       { x: ML + 14, y: y - 36, size: 10, font: fonts.regular, color: C.dark },
     )
     drawFooter(page, fonts, data.scanDate)
@@ -577,14 +600,23 @@ function buildViolationPages(doc: PDFDocument, fonts: Fonts, data: EvidenceData,
   }
 
   for (let i = 0; i < shown.length; i++) {
-    const v      = shown[i]!
-    const impact = v.impact ?? 'minor'
-    const iColor = impactColor(v.impact)
-    const iBg    = impactBg(v.impact)
+    const v        = shown[i]!
+    const enhanced = enhancedMap.get(v.id)
+    const impact   = v.impact ?? 'minor'
+    const iColor   = impactColor(v.impact)
+    const iBg      = impactBg(v.impact)
 
     const descLines   = wrapText(v.description, fonts.regular, 10, TW - 22)
     const wcagLine    = v.wcag_criteria.length > 0
-    const cardH       = 16 + descLines.length * 14 + (wcagLine ? 14 : 0) + 14 + 16  // badge+desc+wcag+elements+padding
+
+    // Calculate extra height for enhanced blocks
+    const peLines  = enhanced ? wrapText(enhanced.plainEnglish,   fonts.regular, 9.5, TW - 36) : []
+    const biLines  = enhanced ? wrapText(enhanced.businessImpact, fonts.regular, 9.5, TW - 36) : []
+    const peH      = peLines.length  > 0 ? peLines.length  * 13 + 22 : 0
+    const biH      = biLines.length  > 0 ? biLines.length  * 13 + 22 : 0
+    const diffH    = enhanced ? 22 : 0
+
+    const cardH = 16 + peH + biH + diffH + descLines.length * 14 + (wcagLine ? 14 : 0) + 14 + 16
 
     if (!firstOnPage && y - cardH < MB + 40) {
       drawFooter(page, fonts, data.scanDate)
@@ -615,7 +647,42 @@ function buildViolationPages(doc: PDFDocument, fonts: Fonts, data: EvidenceData,
 
     y -= 22
 
-    // Description
+    // Plain English box (amber) — from Claude enhancement
+    if (peLines.length > 0) {
+      page.drawRectangle({ x: ML + 12, y: y - peH, width: TW - 20, height: peH, color: C.bgAmber })
+      page.drawText('What this means:', { x: ML + 20, y: y - 13, size: 8.5, font: fonts.bold, color: C.fgAmber })
+      let py = y - 26
+      for (const line of peLines) {
+        page.drawText(line, { x: ML + 20, y: py, size: 9.5, font: fonts.regular, color: C.fgAmber })
+        py -= 13
+      }
+      y -= peH + 4
+    }
+
+    // Business impact box (blue) — from Claude enhancement
+    if (biLines.length > 0) {
+      page.drawRectangle({ x: ML + 12, y: y - biH, width: TW - 20, height: biH, color: C.bgMin })
+      page.drawText('Why this matters:', { x: ML + 20, y: y - 13, size: 8.5, font: fonts.bold, color: C.navy })
+      let by = y - 26
+      for (const line of biLines) {
+        page.drawText(line, { x: ML + 20, y: by, size: 9.5, font: fonts.regular, color: C.dark })
+        by -= 13
+      }
+      y -= biH + 4
+    }
+
+    // Fix difficulty badge
+    if (enhanced) {
+      const diffColors: Record<string, PdfColor> = { Easy: C.green, Medium: C.moderate, Hard: C.critical }
+      const dc = diffColors[enhanced.fixDifficulty] ?? C.muted
+      const diffLabel = `${enhanced.fixDifficulty} fix  ·  ${enhanced.estimatedTime}`
+      const diffW     = fonts.bold.widthOfTextAtSize(diffLabel, 8) + 14
+      page.drawRectangle({ x: ML + 12, y: y - 16, width: diffW, height: 18, color: dc, opacity: 0.15 })
+      page.drawText(diffLabel, { x: ML + 19, y: y - 11, size: 8, font: fonts.bold, color: dc })
+      y -= 22
+    }
+
+    // Technical description
     for (const line of descLines) {
       page.drawText(line, { x: ML + 12, y, size: 10, font: fonts.regular, color: C.dark })
       y -= 14
