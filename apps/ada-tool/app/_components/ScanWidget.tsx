@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +16,8 @@ interface ScanResult {
   scanId: string
   score: number
   violations: Violation[]
+  totalViolations?: number
+  severityCounts?: { critical: number; serious: number; moderate: number; minor: number }
   incompleteCount: number
   passCount: number
   coverageNote: string
@@ -33,30 +35,35 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const IMPACT_COLOR: Record<string, string> = {
-  critical: '#dc2626',
-  serious:  '#d97706',
-  moderate: '#ca8a04',
-  minor:    '#6b7280',
-}
+const SEVERITY = {
+  critical: { color: 'var(--critical)', dim: 'var(--critical-dim)' },
+  serious:  { color: 'var(--serious)',  dim: 'var(--serious-dim)' },
+  moderate: { color: 'var(--moderate)', dim: 'var(--moderate-dim)' },
+  minor:    { color: 'var(--minor)',    dim: 'var(--minor-dim)' },
+} as const
 
-const IMPACT_BG: Record<string, string> = {
-  critical: '#fef2f2',
-  serious:  '#fffbeb',
-  moderate: '#fefce8',
-  minor:    '#f9fafb',
+type SeverityKey = keyof typeof SEVERITY
+
+function severityOf(impact: Violation['impact']): SeverityKey {
+  return impact && impact in SEVERITY ? (impact as SeverityKey) : 'minor'
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#16a34a'
-  if (score >= 50) return '#d97706'
-  return '#dc2626'
+  if (score >= 80) return 'var(--success)'
+  if (score >= 60) return 'var(--warning)'
+  return 'var(--danger)'
+}
+
+function scoreGlow(score: number): string {
+  if (score >= 80) return '0 0 40px rgba(63,185,80,0.4)'
+  if (score >= 60) return '0 0 40px rgba(210,153,34,0.4)'
+  return '0 0 40px rgba(248,81,73,0.4)'
 }
 
 function scoreLabel(score: number): string {
-  if (score >= 80) return 'Good'
-  if (score >= 50) return 'Needs Work'
-  return 'Critical Issues'
+  if (score >= 80) return 'Good Standing'
+  if (score >= 60) return 'Needs Work'
+  return 'Critical Risk'
 }
 
 function isValidUrl(raw: string): boolean {
@@ -76,15 +83,36 @@ function withScanId(gumroadUrl: string, scanId: string): string {
   return `${gumroadUrl}${sep}scan_id=${encodeURIComponent(scanId)}`
 }
 
+const LOADING_STEPS = [
+  'Loading your website',
+  'Injecting WCAG scanner',
+  'Running 50+ accessibility checks',
+  'Calculating compliance score',
+]
+
+// Step advance times (ms from scan start) — tuned to typical scan duration
+const STEP_TIMES = [4000, 10000, 22000]
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ScanWidget({ gumroadUrls }: Props) {
   const [businessName, setBusinessName] = useState('')
   const [url,          setUrl]          = useState('')
   const [loading,      setLoading]      = useState(false)
+  const [activeStep,   setActiveStep]   = useState(0)
   const [result,       setResult]       = useState<ScanResult | null>(null)
   const [error,        setError]        = useState<string | null>(null)
   const resultsRef                      = useRef<HTMLDivElement>(null)
+
+  // Advance the loading steps on a fixed schedule while scanning
+  useEffect(() => {
+    if (!loading) {
+      setActiveStep(0)
+      return
+    }
+    const timers = STEP_TIMES.map((ms, i) => setTimeout(() => setActiveStep(i + 1), ms))
+    return () => timers.forEach(clearTimeout)
+  }, [loading])
 
   async function handleScan(e: React.FormEvent) {
     e.preventDefault()
@@ -125,340 +153,443 @@ export default function ScanWidget({ gumroadUrls }: Props) {
     }
   }
 
+  // Severity counts: prefer API totals; fall back to counting the shown top 3
+  const counts = result?.severityCounts ?? {
+    critical: result?.violations.filter(v => v.impact === 'critical').length ?? 0,
+    serious:  result?.violations.filter(v => v.impact === 'serious').length ?? 0,
+    moderate: result?.violations.filter(v => v.impact === 'moderate').length ?? 0,
+    minor:    result?.violations.filter(v => severityOf(v.impact) === 'minor').length ?? 0,
+  }
+  const totalViolations = result?.totalViolations ?? result?.violations.length ?? 0
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '14px 16px',
+    background: 'var(--bg-overlay)',
+    border: '1px solid var(--border-default)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text-primary)',
+    fontSize: '15px',
+    outline: 'none',
+    fontFamily: 'var(--font-sans)',
+  }
+
   return (
-    <div>
-      {/* ── Scan form ────────────────────────────────────────────────────────── */}
-      <form onSubmit={handleScan} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div>
-          <label htmlFor="business-name" style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '4px' }}>
-            Your business name (for the document)
-          </label>
-          <input
-            id="business-name"
-            type="text"
-            value={businessName}
-            onChange={e => setBusinessName(e.target.value)}
-            placeholder="e.g. Joe's Pizza Restaurant"
-            disabled={loading}
+    <div
+      className="scan-card"
+      style={{
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-lg), 0 0 0 1px rgba(59,130,246,0.08)',
+      }}
+    >
+
+      {/* ── Phase 2: loading ─────────────────────────────────────────────── */}
+      {loading ? (
+        <div style={{ padding: '12px 0' }}>
+          <div
+            aria-hidden="true"
             style={{
-              width:        '100%',
-              padding:      '10px 14px',
-              fontSize:     '15px',
-              border:       '1px solid #d1d5db',
-              borderRadius: '6px',
-              outline:      'none',
-              background:   loading ? '#f3f4f6' : '#fff',
-              boxSizing:    'border-box',
+              width: '48px',
+              height: '48px',
+              border: '2px solid var(--border-default)',
+              borderTopColor: 'var(--accent)',
+              borderRadius: '50%',
+              margin: '0 auto 20px',
+              animation: 'spin 0.8s linear infinite',
             }}
           />
+          <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px', textAlign: 'center' }}>
+            Analyzing accessibility barriers...
+          </div>
+          <div style={{ maxWidth: '320px', margin: '0 auto' }}>
+            {LOADING_STEPS.map((step, i) => {
+              const done   = i < activeStep
+              const active = i === activeStep
+              return (
+                <div
+                  key={step}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '6px 0',
+                    fontSize: '14px',
+                    color: done ? 'var(--success)' : active ? 'var(--accent-bright)' : 'var(--text-muted)',
+                  }}
+                >
+                  {done ? (
+                    <span style={{ width: '8px', textAlign: 'center' }}>✓</span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: active ? 'var(--accent)' : 'var(--text-muted)',
+                        animation: active ? 'pulse 1.2s ease-in-out infinite' : undefined,
+                      }}
+                    />
+                  )}
+                  <span>{step}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          placeholder="https://yourbusiness.com"
-          disabled={loading}
-          aria-label="Website URL to scan"
-          style={{
-            flex:         '1 1 260px',
-            padding:      '12px 16px',
-            fontSize:     '16px',
-            border:       '2px solid #d1d5db',
-            borderRadius: '6px',
-            outline:      'none',
-            background:   loading ? '#f3f4f6' : '#fff',
-          }}
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding:       '12px 28px',
-            fontSize:      '16px',
-            fontWeight:    '700',
-            background:    loading ? '#93c5fd' : '#1d4ed8',
-            color:         '#fff',
-            border:        'none',
-            borderRadius:  '6px',
-            cursor:        loading ? 'not-allowed' : 'pointer',
-            whiteSpace:    'nowrap',
-          }}
-        >
-          {loading ? 'Scanning…' : 'Scan My Site Free'}
-        </button>
-        </div>
-      </form>
+      ) : (
 
-      {loading && (
-        <p style={{ marginTop: '12px', color: '#6b7280', fontSize: '14px' }}>
-          Running WCAG scan — this can take up to 30 seconds…
-        </p>
+        /* ── Phase 1: input ─────────────────────────────────────────────── */
+        <form onSubmit={handleScan}>
+          <input
+            type="text"
+            className="input-dark"
+            value={businessName}
+            onChange={e => setBusinessName(e.target.value)}
+            placeholder="Business name (optional — appears on your documents)"
+            aria-label="Business name (optional — appears on your documents)"
+            style={{ ...inputStyle, marginBottom: '10px' }}
+          />
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              className="input-dark"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="https://yourbusiness.com"
+              aria-label="Website URL to scan"
+              style={{ ...inputStyle, flex: '1 1 240px', width: 'auto', fontSize: '16px' }}
+            />
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{
+                background: 'linear-gradient(135deg, var(--accent), #1d4ed8)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 28px',
+                fontSize: '16px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                fontFamily: 'var(--font-sans)',
+              }}
+            >
+              Scan My Site Free
+            </button>
+          </div>
+        </form>
       )}
 
       {error && (
-        <div role="alert" style={{
-          marginTop:    '12px',
-          padding:      '12px 16px',
-          background:   '#fef2f2',
-          border:       '1px solid #fca5a5',
-          borderRadius: '6px',
-          color:        '#991b1b',
-          fontSize:     '14px',
-        }}>
+        <div
+          role="alert"
+          style={{
+            marginTop: '14px',
+            padding: '12px 16px',
+            background: 'var(--critical-dim)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 'var(--radius-md)',
+            color: '#fca5a5',
+            fontSize: '14px',
+          }}
+        >
           {error}
         </div>
       )}
 
-      {/* ── Scan results ─────────────────────────────────────────────────────── */}
-      {result && (
-        <div ref={resultsRef} style={{ marginTop: '32px' }}>
+      {/* ── Phase 3: results ─────────────────────────────────────────────── */}
+      {result && !loading && (
+        <div ref={resultsRef} style={{ marginTop: '24px' }}>
 
-          {/* Score card */}
-          <div style={{
-            display:       'flex',
-            alignItems:    'center',
-            gap:           '24px',
-            padding:       '24px',
-            background:    '#f9fafb',
-            border:        '1px solid #e5e7eb',
-            borderRadius:  '8px',
-            marginBottom:  '24px',
-            flexWrap:      'wrap',
-          }}>
-            <div style={{ textAlign: 'center', minWidth: '80px' }}>
-              <div style={{
-                fontSize:   '52px',
-                fontWeight: '800',
-                color:      scoreColor(result.score),
-                lineHeight: '1',
-              }}>
+          {/* Score */}
+          <div
+            style={{
+              textAlign: 'center',
+              paddingBottom: '24px',
+              borderBottom: '1px solid var(--border-subtle)',
+              marginBottom: '24px',
+            }}
+          >
+            <div style={{ lineHeight: 1 }}>
+              <span
+                style={{
+                  fontSize: '88px',
+                  fontWeight: 900,
+                  letterSpacing: '-0.05em',
+                  color: scoreColor(result.score),
+                  textShadow: scoreGlow(result.score),
+                }}
+              >
                 {result.score}
-              </div>
-              <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>out of 100</div>
+              </span>
+              <span
+                style={{
+                  fontSize: '32px',
+                  color: 'var(--text-muted)',
+                  verticalAlign: 'top',
+                  display: 'inline-block',
+                  marginTop: '16px',
+                  marginLeft: '4px',
+                  fontWeight: 700,
+                }}
+              >
+                /100
+              </span>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{
-                fontSize:     '18px',
-                fontWeight:   '700',
-                color:        scoreColor(result.score),
-                marginBottom: '6px',
-              }}>
-                {scoreLabel(result.score)}
-              </div>
-              <div style={{ fontSize: '14px', color: '#374151', marginBottom: '8px' }}>
-                {result.violations.length === 0
-                  ? 'No critical violations detected in automated scan.'
-                  : `${result.violations.length} violation type${result.violations.length > 1 ? 's' : ''} detected (showing top 3 free).`}
-              </div>
-              <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                {result.passCount} checks passed &nbsp;·&nbsp;
-                {result.incompleteCount} require manual review
-              </div>
+            <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px', color: scoreColor(result.score) }}>
+              {scoreLabel(result.score)}
             </div>
           </div>
 
-          {/* Top 3 violations */}
-          {result.violations.length > 0 && (
-            <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', marginBottom: '12px' }}>
-                Top Issues Found (free preview — 3 of {result.violations.length})
-              </h3>
-              {result.violations.map((v) => (
-                <div key={v.id} style={{
-                  padding:       '14px 16px',
-                  marginBottom:  '10px',
-                  background:    IMPACT_BG[v.impact ?? 'minor'],
-                  border:        `1px solid ${IMPACT_COLOR[v.impact ?? 'minor']}33`,
-                  borderLeft:    `4px solid ${IMPACT_COLOR[v.impact ?? 'minor']}`,
-                  borderRadius:  '6px',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
-                    <span style={{
-                      fontSize:     '13px',
-                      fontWeight:   '700',
-                      color:        IMPACT_COLOR[v.impact ?? 'minor'],
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}>
-                      {v.impact ?? 'minor'}
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {v.nodes_affected} element{v.nodes_affected !== 1 ? 's' : ''} affected
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#1f2937', marginTop: '6px' }}>
-                    {v.description}
-                  </div>
-                  {v.wcag_criteria.length > 0 && (
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                      WCAG: {v.wcag_criteria.join(', ')}
-                    </div>
-                  )}
+          {/* Severity stat boxes */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            {(Object.keys(SEVERITY) as SeverityKey[]).map(key => (
+              <div
+                key={key}
+                style={{
+                  background: 'var(--bg-overlay)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '12px',
+                  flex: '1 1 100px',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontSize: '24px', fontWeight: 800, color: SEVERITY[key].color }}>
+                  {counts[key]}
                 </div>
-              ))}
+                <div
+                  style={{
+                    fontSize: '11px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: 'var(--text-muted)',
+                    marginTop: '4px',
+                  }}
+                >
+                  {key}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Violations */}
+          {result.violations.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 700 }}>Top Issues Found</span>
+                <span
+                  style={{
+                    background: 'var(--accent-dim)',
+                    color: 'var(--accent-bright)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '2px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {result.violations.length} of {totalViolations}
+                </span>
+              </div>
+
+              {result.violations.map(v => {
+                const sev = severityOf(v.impact)
+                return (
+                  <div
+                    key={v.id}
+                    style={{
+                      background: 'var(--bg-overlay)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      borderLeft: `3px solid ${SEVERITY[sev].color}`,
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                          padding: '3px 10px',
+                          borderRadius: 'var(--radius-full)',
+                          background: SEVERITY[sev].dim,
+                          color: SEVERITY[sev].color,
+                        }}
+                      >
+                        {sev}
+                      </span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {v.nodes_affected} element{v.nodes_affected !== 1 ? 's' : ''} affected
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, margin: '8px 0 4px', lineHeight: 1.4 }}>
+                      {v.description}
+                    </div>
+                    {v.wcag_criteria.length > 0 && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        {v.wcag_criteria.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
           {/* Coverage note */}
-          <div style={{
-            padding:      '12px 16px',
-            background:   '#fffbeb',
-            border:       '1px solid #fde68a',
-            borderRadius: '6px',
-            fontSize:     '13px',
-            color:        '#92400e',
-            marginBottom: '32px',
-          }}>
-            <strong>Coverage Note:</strong> {result.coverageNote}
+          <div
+            style={{
+              background: 'rgba(234,179,8,0.08)',
+              border: '1px solid rgba(234,179,8,0.2)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              marginTop: '16px',
+              fontSize: '13px',
+              color: '#fde68a',
+              lineHeight: 1.5,
+            }}
+          >
+            {result.coverageNote} {result.passCount} checks passed · {result.incompleteCount} require manual review.
           </div>
 
-          {/* Paywall / pricing */}
-          <div id="pricing" style={{
-            padding:      '32px',
-            background:   '#1e293b',
-            borderRadius: '12px',
-            color:        '#fff',
-          }}>
-            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 8px' }}>
-              Get Your Full WCAG Technical Evidence Package
-            </h3>
-            <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 24px' }}>
-              Showing 3 of {result.violations.length > 3 ? result.violations.length : 'all'} detected issues.
-              Your full package includes every violation, remediation code, and legal-ready documentation.
-            </p>
-
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-
-              {/* Basic */}
-              <div style={{
-                flex:         '1 1 180px',
-                padding:      '20px',
-                background:   '#334155',
-                borderRadius: '8px',
-                border:       '1px solid #475569',
-              }}>
-                <div style={{ fontSize: '22px', fontWeight: '800', marginBottom: '4px' }}>$49</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#cbd5e1', marginBottom: '12px' }}>
-                  Basic
-                </div>
-                <ul style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px', paddingLeft: '18px' }}>
-                  <li>WCAG Evidence Package PDF</li>
-                  <li>All violations listed</li>
-                  <li>Executive summary</li>
-                </ul>
-                <a
-                  href={withScanId(gumroadUrls.basic, result.scanId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display:       'block',
-                    textAlign:     'center',
-                    padding:       '10px',
-                    background:    '#3b82f6',
-                    color:         '#fff',
-                    textDecoration: 'none',
-                    borderRadius:  '6px',
-                    fontSize:      '14px',
-                    fontWeight:    '700',
-                  }}
-                >
-                  Get Basic
-                </a>
-              </div>
-
-              {/* Premium */}
-              <div style={{
-                flex:         '1 1 180px',
-                padding:      '20px',
-                background:   '#1d4ed8',
-                borderRadius: '8px',
-                border:       '2px solid #60a5fa',
-                position:     'relative',
-              }}>
-                <div style={{
-                  position:     'absolute',
-                  top:          '-10px',
-                  left:         '50%',
-                  transform:    'translateX(-50%)',
-                  background:   '#f59e0b',
-                  color:        '#000',
-                  fontSize:     '11px',
-                  fontWeight:   '700',
-                  padding:      '2px 10px',
-                  borderRadius: '20px',
-                }}>
-                  MOST POPULAR
-                </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', marginBottom: '4px' }}>$79</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#bfdbfe', marginBottom: '12px' }}>
-                  Premium
-                </div>
-                <ul style={{ fontSize: '13px', color: '#93c5fd', margin: '0 0 16px', paddingLeft: '18px' }}>
-                  <li>Everything in Basic</li>
-                  <li>Developer Remediation Guide</li>
-                  <li>Before/After code examples</li>
-                </ul>
-                <a
-                  href={withScanId(gumroadUrls.premium, result.scanId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display:       'block',
-                    textAlign:     'center',
-                    padding:       '10px',
-                    background:    '#fff',
-                    color:         '#1d4ed8',
-                    textDecoration: 'none',
-                    borderRadius:  '6px',
-                    fontSize:      '14px',
-                    fontWeight:    '700',
-                  }}
-                >
-                  Get Premium
-                </a>
-              </div>
-
-              {/* Monitoring */}
-              <div style={{
-                flex:         '1 1 180px',
-                padding:      '20px',
-                background:   '#334155',
-                borderRadius: '8px',
-                border:       '1px solid #475569',
-              }}>
-                <div style={{ fontSize: '22px', fontWeight: '800', marginBottom: '4px' }}>$149<span style={{ fontSize: '14px', fontWeight: '400' }}>/mo</span></div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#cbd5e1', marginBottom: '12px' }}>
-                  Monitoring
-                </div>
-                <ul style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px', paddingLeft: '18px' }}>
-                  <li>Everything in Premium</li>
-                  <li>Monthly re-scans</li>
-                  <li>Monitoring Confirmation doc</li>
-                </ul>
-                <a
-                  href={withScanId(gumroadUrls.monitoring, result.scanId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display:       'block',
-                    textAlign:     'center',
-                    padding:       '10px',
-                    background:    '#3b82f6',
-                    color:         '#fff',
-                    textDecoration: 'none',
-                    borderRadius:  '6px',
-                    fontSize:      '14px',
-                    fontWeight:    '700',
-                  }}
-                >
-                  Get Monitoring
-                </a>
-              </div>
-
+          {/* Pricing */}
+          <div
+            id="pricing"
+            style={{
+              marginTop: '24px',
+              borderTop: '1px solid var(--border-subtle)',
+              paddingTop: '24px',
+            }}
+          >
+            <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
+              Get Your Full Evidence Package
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Showing {result.violations.length} of {totalViolations} detected issues
             </div>
 
-            <p style={{ fontSize: '11px', color: '#64748b', margin: '20px 0 0', textAlign: 'center' }}>
+            <div className="grid-tiers">
+              {[
+                {
+                  name: 'Basic',
+                  price: '$49',
+                  sub: 'one-time purchase',
+                  features: ['Evidence Package PDF', 'All violations documented', 'Executive summary', 'Plain-English explanations'],
+                  href: withScanId(gumroadUrls.basic, result.scanId),
+                  featured: false,
+                },
+                {
+                  name: 'Premium',
+                  price: '$79',
+                  sub: 'one-time purchase',
+                  features: ['Everything in Basic', 'Developer Remediation Guide', 'Before/after code examples', 'Fix difficulty ratings'],
+                  href: withScanId(gumroadUrls.premium, result.scanId),
+                  featured: true,
+                },
+                {
+                  name: 'Monitoring',
+                  price: '$149',
+                  sub: 'per month',
+                  features: ['Everything in Premium', 'Monthly re-scans', 'Monitoring Confirmation doc', 'Ongoing evidence trail'],
+                  href: withScanId(gumroadUrls.monitoring, result.scanId),
+                  featured: false,
+                },
+              ].map(tier => (
+                <div
+                  key={tier.name}
+                  className={tier.featured ? undefined : 'tier-card'}
+                  style={{
+                    background: 'var(--bg-overlay)',
+                    border: tier.featured ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '20px',
+                    position: 'relative',
+                    boxShadow: tier.featured ? 'var(--shadow-accent)' : undefined,
+                    marginTop: tier.featured ? 0 : undefined,
+                  }}
+                >
+                  {tier.featured && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-12px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: 'var(--accent)',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '4px 14px',
+                        borderRadius: 'var(--radius-full)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Most Popular
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    {tier.name}
+                  </div>
+                  <div style={{ fontSize: '32px', fontWeight: 900, color: 'var(--text-primary)' }}>
+                    {tier.price}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                    {tier.sub}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 2, marginBottom: '16px' }}>
+                    {tier.features.map(f => (
+                      <div key={f}>• {f}</div>
+                    ))}
+                  </div>
+                  <a
+                    href={tier.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={tier.featured ? 'btn-filled' : 'btn-outline'}
+                    style={{
+                      display: 'block',
+                      textAlign: 'center',
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      fontWeight: 700,
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      boxSizing: 'border-box',
+                      ...(tier.featured
+                        ? { background: 'var(--accent)', color: '#fff', border: 'none' }
+                        : {
+                            border: '1px solid var(--border-strong)',
+                            background: 'transparent',
+                            color: 'var(--text-primary)',
+                          }),
+                    }}
+                  >
+                    Get {tier.name}
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '16px 0 0', textAlign: 'center' }}>
               PDFs delivered by email within minutes. Links valid 7 days.
               This is a technical assessment, not legal advice. Consult a qualified attorney.
             </p>

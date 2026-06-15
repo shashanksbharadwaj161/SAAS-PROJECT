@@ -8,6 +8,10 @@ interface IndustryData {
   label: string
   metaTitle: string
   metaDescription: string
+  // Unique accent per industry — used in hero tint, stats, and CTA
+  accent: string
+  accentRgb: string  // "r,g,b" for rgba() compositions
+  cta: string
   intro: string
   commonViolations: { title: string; description: string }[]
   urgencyNote: string
@@ -19,6 +23,9 @@ const INDUSTRIES: Record<string, IndustryData> = {
     metaTitle: 'ADA Demand Letter for Restaurants — WCAG Technical Evidence Package',
     metaDescription:
       'Restaurant owner received an ADA demand letter? Get a WCAG Technical Evidence Package showing good-faith accessibility assessment. Free scan. Not legal advice.',
+    accent: '#f97316',
+    accentRgb: '249,115,22',
+    cta: 'Scan your restaurant website free',
     intro:
       'Restaurant websites are among the most frequently targeted in ADA demand letter campaigns. ' +
       'Plaintiffs often cite missing alt text on food photos, inaccessible online menus, and ' +
@@ -62,6 +69,9 @@ const INDUSTRIES: Record<string, IndustryData> = {
     metaTitle: 'ADA Demand Letter for Dental Practices — WCAG Technical Evidence Package',
     metaDescription:
       'Dental practice received an ADA demand letter? Get a WCAG Technical Evidence Package showing good-faith accessibility effort. Free scan. Not legal advice.',
+    accent: '#06b6d4',
+    accentRgb: '6,182,212',
+    cta: 'Scan your practice website free',
     intro:
       'Dental and medical practice websites frequently receive ADA demand letters because ' +
       'healthcare sites often rely on complex patient portals, PDF forms, and appointment ' +
@@ -104,6 +114,9 @@ const INDUSTRIES: Record<string, IndustryData> = {
     metaTitle: 'ADA Demand Letter for Law Firms — WCAG Technical Evidence Package',
     metaDescription:
       'Law firm website received an ADA demand letter? Get a WCAG Technical Evidence Package showing your accessibility assessment. Free scan. Not legal advice.',
+    accent: '#8b5cf6',
+    accentRgb: '139,92,246',
+    cta: 'Scan your firm website free',
     intro:
       'Law firm websites — often built on legacy CMS platforms without accessibility review — ' +
       'are a growing target for ADA demand letters. Common issues include inaccessible attorney ' +
@@ -147,6 +160,9 @@ const INDUSTRIES: Record<string, IndustryData> = {
     metaTitle: 'ADA Demand Letter for Gyms — WCAG Technical Evidence Package',
     metaDescription:
       'Gym or fitness center received an ADA demand letter? Get a WCAG Technical Evidence Package. Free scan. Not legal advice.',
+    accent: '#ef4444',
+    accentRgb: '239,68,68',
+    cta: 'Scan your gym website free',
     intro:
       'Gym and fitness center websites are commonly targeted in ADA demand letter campaigns, ' +
       'especially sites with class schedule systems, membership sign-up flows, and video content. ' +
@@ -189,6 +205,9 @@ const INDUSTRIES: Record<string, IndustryData> = {
     metaTitle: 'ADA Demand Letter for Real Estate Agents — WCAG Technical Evidence Package',
     metaDescription:
       'Real estate agent or brokerage received an ADA demand letter? Get a WCAG Technical Evidence Package. Free scan. Not legal advice.',
+    accent: '#10b981',
+    accentRgb: '16,185,129',
+    cta: 'Scan your listings site free',
     intro:
       'Real estate agent and brokerage websites — often built on industry-specific IDX platforms — ' +
       'frequently have accessibility gaps in property search forms, listing photo galleries, and ' +
@@ -265,141 +284,246 @@ export default async function IndustryPage({ params }: Props) {
   }
 
   return (
-    <main style={{ fontFamily: 'Arial, Helvetica, sans-serif', color: '#111827' }}>
+    <main>
 
       {/* ── Legal notice bar ────────────────────────────────────────────────── */}
-      <div style={{
-        background:   '#fef3c7',
-        borderBottom: '1px solid #fde68a',
-        padding:      '10px 24px',
-        textAlign:    'center',
-        fontSize:     '13px',
-        color:        '#92400e',
-      }}>
-        <strong>Important:</strong> This tool provides a technical WCAG assessment. It does not
-        constitute legal advice. If you received an ADA demand letter, consult a licensed attorney.
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 200,
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #78350f, #92400e)',
+          color: '#fef3c7',
+          fontSize: '13px',
+          textAlign: 'center',
+          padding: '8px 16px',
+          letterSpacing: '0.01em',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}
+      >
+        <span>
+          ⚠ Technical assessment only — not legal advice
+          <span className="notice-bar-mid"> · axe-core identifies ~57% of WCAG 2.2 issues</span>
+          {' '}· Always consult a qualified attorney
+        </span>
       </div>
 
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section style={{
-        background: 'linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%)',
-        color:      '#fff',
-        padding:    '64px 24px',
-        textAlign:  'center',
-      }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <div style={{
-            display:       'inline-block',
-            background:    '#f59e0b',
-            color:         '#000',
-            fontSize:      '12px',
-            fontWeight:    '700',
-            padding:       '4px 14px',
-            borderRadius:  '20px',
-            marginBottom:  '16px',
+      {/* ── Navbar ──────────────────────────────────────────────────────────── */}
+      <nav
+        style={{
+          position: 'sticky',
+          top: '32px',
+          zIndex: 100,
+          background: 'rgba(6, 9, 18, 0.85)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          borderBottom: '1px solid var(--border-subtle)',
+          padding: '0 clamp(16px, 5vw, 80px)',
+          height: '64px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: '32px',
+        }}
+      >
+        <a href="/" style={{ color: 'var(--accent)', fontSize: '18px', fontWeight: 700, textDecoration: 'none' }}>
+          ⬡ ADA Evidence
+        </a>
+        <a
+          href="#scan"
+          style={{
+            background: data.accent,
+            color: '#fff',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 20px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontSize: '14px',
+            textDecoration: 'none',
+          }}
+        >
+          Get Evidence Package →
+        </a>
+      </nav>
+
+      {/* ── Hero (industry-tinted gradient) ─────────────────────────────────── */}
+      <section
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          padding: 'clamp(64px, 10vh, 110px) 20px clamp(48px, 8vh, 90px)',
+          textAlign: 'center',
+          background:
+            `radial-gradient(ellipse 120% 60% at 50% 0%, rgba(${data.accentRgb},0.10), transparent 70%), ` +
+            'var(--bg-base)',
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '28px',
+            background: `rgba(${data.accentRgb},0.12)`,
+            border: `1px solid rgba(${data.accentRgb},0.35)`,
+            borderRadius: 'var(--radius-full)',
+            padding: '8px 20px',
+            fontSize: '13px',
+            color: data.accent,
+            letterSpacing: '0.05em',
             textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}>
-            ADA demand letter — {data.label}
-          </div>
-          <h1 style={{ fontSize: 'clamp(24px,4vw,42px)', fontWeight: '800', margin: '0 0 16px', lineHeight: '1.2' }}>
-            WCAG Technical Evidence Package<br />for {data.label}
-          </h1>
-          <p style={{ fontSize: '17px', color: '#bfdbfe', margin: '0 0 32px', lineHeight: '1.6' }}>
-            Scan your website free and get documentation of your good-faith
-            accessibility assessment for your attorney.
-          </p>
+          }}
+        >
+          ADA Demand Letters — {data.label}
+        </div>
 
-          <div style={{ textAlign: 'left', maxWidth: '600px', margin: '0 auto' }}>
-            <ScanWidget gumroadUrls={gumroadUrls} />
-          </div>
+        <h1
+          style={{
+            fontSize: 'clamp(30px, 5vw, 52px)',
+            fontWeight: 900,
+            letterSpacing: '-0.04em',
+            lineHeight: 1.1,
+            color: 'var(--text-primary)',
+            maxWidth: '820px',
+            margin: '0 auto 20px',
+          }}
+        >
+          WCAG Technical Evidence{' '}
+          <span style={{ color: data.accent }}>for {data.label}</span>
+        </h1>
 
-          <p style={{ fontSize: '12px', color: '#93c5fd', marginTop: '16px' }}>
-            Free scan · No account required · Not legal advice
-          </p>
+        <p
+          style={{
+            fontSize: 'clamp(15px, 2vw, 18px)',
+            color: 'var(--text-secondary)',
+            lineHeight: 1.7,
+            maxWidth: '560px',
+            margin: '0 auto 40px',
+          }}
+        >
+          {data.cta}. Get timestamped documentation of your good-faith
+          accessibility assessment for your attorney.
+        </p>
+
+        <div id="scan" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'left' }}>
+          <ScanWidget gumroadUrls={gumroadUrls} />
+        </div>
+
+        <div className="trust-bar" style={{ marginTop: '24px', fontSize: '13px', color: 'var(--text-muted)' }}>
+          <span>✓ Free scan</span>
+          <span>✓ No account required</span>
+          <span>✓ PDF in minutes</span>
+          <span>✓ Not legal advice</span>
         </div>
       </section>
 
       {/* ── Industry intro ──────────────────────────────────────────────────── */}
-      <section style={{ padding: '56px 24px', background: '#fff' }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 16px' }}>
+      <section
+        style={{
+          padding: '64px 20px',
+          background: 'var(--bg-surface)',
+          borderTop: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}
+      >
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 16px' }}>
             ADA Demand Letters and {data.label}
           </h2>
-          <p style={{ fontSize: '16px', color: '#374151', lineHeight: '1.8', margin: '0 0 16px' }}>
+          <p style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.8, margin: '0 0 24px' }}>
             {data.intro}
           </p>
 
-          {/* Urgency box */}
-          <div style={{
-            padding:      '16px 20px',
-            background:   '#fef2f2',
-            border:       '1px solid #fca5a5',
-            borderLeft:   '4px solid #dc2626',
-            borderRadius: '6px',
-            fontSize:     '14px',
-            color:        '#7f1d1d',
-            lineHeight:   '1.7',
-          }}>
-            <strong>Action recommended:</strong> {data.urgencyNote}
+          <div
+            style={{
+              padding: '16px 20px',
+              background: 'var(--critical-dim)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderLeft: '3px solid var(--critical)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '14px',
+              color: '#fca5a5',
+              lineHeight: 1.7,
+            }}
+          >
+            <strong style={{ color: 'var(--critical)' }}>Action recommended:</strong> {data.urgencyNote}
           </div>
         </div>
       </section>
 
       {/* ── Common violations ───────────────────────────────────────────────── */}
-      <section style={{ padding: '56px 24px', background: '#f8fafc' }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 24px' }}>
-            Common WCAG Issues Found on {data.label} Websites
+      <section style={{ padding: '64px 20px' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 12px' }}>
+            Common WCAG Issues on {data.label} Websites
           </h2>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>
-            These are accessibility issues frequently found on {data.label.toLowerCase()} websites
-            by automated scanning. Your specific site may have different issues — scan to find out.
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '0 0 24px' }}>
+            Frequently found by automated scanning, ranked by how often they appear in
+            {' '}{data.label.toLowerCase()} demand letters. Your site may differ — scan to find out.
           </p>
-          <div>
-            {data.commonViolations.map((v, i) => (
-              <div key={i} style={{
-                display:      'flex',
-                gap:          '16px',
-                padding:      '20px 0',
-                borderBottom: i < data.commonViolations.length - 1 ? '1px solid #e5e7eb' : 'none',
-              }}>
-                <div style={{
-                  flexShrink:     0,
-                  width:          '28px',
-                  height:         '28px',
-                  background:     '#dc2626',
-                  color:          '#fff',
-                  borderRadius:   '50%',
-                  display:        'flex',
-                  alignItems:     'center',
+
+          {data.commonViolations.map((v, i) => (
+            <div
+              key={v.title}
+              style={{
+                display: 'flex',
+                gap: '16px',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                marginBottom: '10px',
+              }}
+            >
+              <div
+                style={{
+                  flexShrink: 0,
+                  width: '32px',
+                  height: '32px',
+                  background: `rgba(${data.accentRgb},0.12)`,
+                  border: `1px solid rgba(${data.accentRgb},0.35)`,
+                  color: data.accent,
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize:       '13px',
-                  fontWeight:     '700',
-                  marginTop:      '2px',
-                }}>
-                  {i + 1}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 6px', color: '#111827' }}>
-                    {v.title}
-                  </h3>
-                  <p style={{ fontSize: '14px', color: '#374151', margin: 0, lineHeight: '1.7' }}>
-                    {v.description}
-                  </p>
-                </div>
+                  fontSize: '14px',
+                  fontWeight: 700,
+                }}
+              >
+                {i + 1}
               </div>
-            ))}
-          </div>
-          <div style={{
-            marginTop:    '24px',
-            padding:      '12px 16px',
-            background:   '#fffbeb',
-            border:       '1px solid #fde68a',
-            borderRadius: '6px',
-            fontSize:     '13px',
-            color:        '#92400e',
-          }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 6px' }}>
+                  {v.title}
+                </h3>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.7 }}>
+                  {v.description}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '12px 16px',
+              background: 'rgba(234,179,8,0.08)',
+              border: '1px solid rgba(234,179,8,0.2)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '13px',
+              color: '#fde68a',
+              lineHeight: 1.5,
+            }}
+          >
             <strong>Coverage note:</strong> Automated scanning with axe-core identifies approximately
             57% of WCAG 2.2 issues. Manual review by an accessibility specialist is required for
             a comprehensive assessment.
@@ -407,130 +531,59 @@ export default async function IndustryPage({ params }: Props) {
         </div>
       </section>
 
-      {/* ── Pricing CTA ─────────────────────────────────────────────────────── */}
-      <section style={{ padding: '56px 24px', background: '#1e293b', color: '#fff' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 8px' }}>
-            Get Your Technical Evidence Package
-          </h2>
-          <p style={{ fontSize: '15px', color: '#94a3b8', margin: '0 0 32px' }}>
-            Scan free, then choose the package that fits your situation.
-            PDFs delivered by email. Not legal advice.
-          </p>
-
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            {[
-              {
-                label: 'Basic',
-                price: '$49',
-                sub:   'one-time',
-                items: ['Evidence Package PDF', 'All violations listed', 'Executive summary'],
-                href:  gumroadUrls.basic,
-                light: true,
-              },
-              {
-                label:    'Premium',
-                price:    '$79',
-                sub:      'one-time',
-                items:    ['Everything in Basic', 'Developer Remediation Guide', 'Code examples'],
-                href:     gumroadUrls.premium,
-                light:    false,
-                featured: true,
-              },
-              {
-                label: 'Monitoring',
-                price: '$149',
-                sub:   '/month',
-                items: ['Everything in Premium', 'Monthly re-scans', 'Monitoring Confirmation'],
-                href:  gumroadUrls.monitoring,
-                light: true,
-              },
-            ].map(({ label, price, sub, items, href, light, featured }) => (
-              <div key={label} style={{
-                flex:         '1 1 200px',
-                maxWidth:     '220px',
-                padding:      '24px 20px',
-                background:   featured ? '#1d4ed8' : '#334155',
-                borderRadius: '10px',
-                border:       featured ? '2px solid #60a5fa' : '1px solid #475569',
-                position:     'relative',
-              }}>
-                {featured && (
-                  <div style={{
-                    position:     'absolute',
-                    top:          '-10px',
-                    left:         '50%',
-                    transform:    'translateX(-50%)',
-                    background:   '#f59e0b',
-                    color:        '#000',
-                    fontSize:     '10px',
-                    fontWeight:   '700',
-                    padding:      '2px 10px',
-                    borderRadius: '20px',
-                    whiteSpace:   'nowrap',
-                  }}>
-                    MOST POPULAR
-                  </div>
-                )}
-                <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px', color: light ? '#94a3b8' : '#bfdbfe' }}>
-                  {label}
-                </div>
-                <div style={{ fontSize: '26px', fontWeight: '800', marginBottom: '16px' }}>
-                  {price} <span style={{ fontSize: '13px', fontWeight: '400', color: '#94a3b8' }}>{sub}</span>
-                </div>
-                <ul style={{ fontSize: '13px', color: light ? '#94a3b8' : '#93c5fd', paddingLeft: '16px', margin: '0 0 16px', lineHeight: '1.8' }}>
-                  {items.map(item => <li key={item}>{item}</li>)}
-                </ul>
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display:        'block',
-                    textAlign:      'center',
-                    padding:        '9px',
-                    background:     featured ? '#fff' : '#3b82f6',
-                    color:          featured ? '#1d4ed8' : '#fff',
-                    textDecoration: 'none',
-                    borderRadius:   '6px',
-                    fontSize:       '13px',
-                    fontWeight:     '700',
-                  }}
-                >
-                  Get {label}
-                </a>
-              </div>
-            ))}
-          </div>
-
-          <p style={{ fontSize: '11px', color: '#475569', marginTop: '20px' }}>
-            Payments via Gumroad. PDFs emailed within minutes. This is a technical assessment package.
-            Not legal advice. Consult a qualified attorney.
-          </p>
-        </div>
+      {/* ── CTA ─────────────────────────────────────────────────────────────── */}
+      <section
+        style={{
+          padding: '64px 20px',
+          background: 'var(--bg-surface)',
+          borderTop: '1px solid var(--border-subtle)',
+          textAlign: 'center',
+        }}
+      >
+        <h2 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 8px' }}>
+          Get Your Technical Evidence Package
+        </h2>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 28px' }}>
+          {data.cta}, then choose the package that fits your situation. From $49.
+        </p>
+        <a
+          href="#scan"
+          style={{
+            display: 'inline-block',
+            background: data.accent,
+            color: '#fff',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px 32px',
+            fontWeight: 700,
+            fontSize: '16px',
+            textDecoration: 'none',
+          }}
+        >
+          Start Free Scan
+        </a>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '20px' }}>
+          PDFs emailed within minutes. Not legal advice. Consult a qualified attorney.
+        </p>
       </section>
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer style={{
-        padding:    '32px 24px',
-        background: '#0f172a',
-        color:      '#94a3b8',
-        textAlign:  'center',
-        fontSize:   '13px',
-        lineHeight: '1.8',
-      }}>
-        <p style={{ margin: '0 0 8px' }}>
-          <a href="/" style={{ color: '#60a5fa', textDecoration: 'none' }}>
-            ← Back to main site
-          </a>
-        </p>
-        <p style={{ margin: '0 0 8px' }}>
-          Not legal advice. Not a compliance certification. Consult a qualified attorney.
-        </p>
-        <p style={{ margin: 0, fontSize: '12px' }}>
-          Automated scanning detects ~57% of WCAG 2.2 issues (axe-core, Deque Systems research).
-          Manual review required for full assessment.
-        </p>
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer
+        className="footer-bar"
+        style={{
+          background: 'var(--bg-base)',
+          borderTop: '1px solid var(--border-subtle)',
+          padding: '40px 20px',
+        }}
+      >
+        <a href="/" style={{ color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' }}>
+          ⬡ ADA Evidence Tool
+        </a>
+        <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+          Not legal advice. Technical assessment only. © 2026
+        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+          axe-core ~57% WCAG 2.2 coverage
+        </span>
       </footer>
 
     </main>

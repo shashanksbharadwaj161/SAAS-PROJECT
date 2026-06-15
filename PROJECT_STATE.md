@@ -2,7 +2,50 @@
 
 ---
 
-## Last Session: Comprehensive fix session (2026-06-12)
+## Last Session: Premium dark UI redesign + PDF final version (2026-06-15)
+
+**Goal:** Final quality pass — make the product look and work like it costs $100+. Dark premium design system across all web UI; rebuilt PDF as a legal-grade document; new results page.
+**Status:** Complete. Full `next build` passes (12 routes). Type-checked clean. Committed and pushed.
+
+### Files Changed This Session
+
+```
+apps/ada-tool/app/design-tokens.css            ← NEW — CSS variable design system (bg/border/brand/severity/text/radii/shadows)
+apps/ada-tool/app/globals.css                  ← NEW — resets, :hover/:focus states, @keyframes (spin/pulse), @media mobile rules
+apps/ada-tool/app/layout.tsx                   ← imports both CSS files; body uses tokens; viewport themeColor #060912
+apps/ada-tool/app/page.tsx                     ← full rewrite — fixed notice bar, sticky blur nav, hero w/ gradient+grid,
+                                                  stats bar, how-it-works, FAQ accordion, footer
+apps/ada-tool/app/_components/ScanWidget.tsx   ← full rewrite — 3 phases (input / animated loader / results),
+                                                  severity stat boxes, premium pricing cards
+apps/ada-tool/app/_components/FaqAccordion.tsx ← NEW — client accordion (useState), chevron rotate
+apps/ada-tool/app/results/[scanId]/page.tsx    ← NEW — server page: fetch scan + latest payment, force-dynamic, noindex
+apps/ada-tool/app/results/[scanId]/ResultsView.tsx ← NEW — client view: score circle, severity filter tabs,
+                                                  PDF downloads OR "Purchase required", share/rescan
+apps/ada-tool/app/[industry]/page.tsx          ← full rewrite — dark system + per-industry accent color
+apps/ada-tool/app/api/scan/route.ts            ← returns totalViolations + severityCounts (all violations, counts only)
+apps/ada-tool/lib/scan.ts                       ← added wcag22aa to axe runOnly tags
+packages/pdf/src/index.ts                       ← full rewrite — rounded-rect cards (SVG paths), navy cover w/ score circle
+                                                  + 4 severity boxes, "Page X of Y" chrome (two-pass), violation cards with
+                                                  PLAIN ENGLISH / LEGAL RELEVANCE / fix-difficulty, success state via line-drawn check
+```
+
+### What's wired
+
+- **Design tokens**: single source in `design-tokens.css`; interactive states + keyframes + responsive in `globals.css` (inline styles can't express `:hover`/`@media`).
+- **ScanWidget loader**: 4 steps advance on setTimeout schedule (4s/10s/22s) via useEffect; CSS `spin`/`pulse` keyframes (reduced-motion respected).
+- **Results page** `/results/[scanId]`: validates UUID → 404; fetches scan + most-recent linked payment; shows signed PDF download URLs when a payment exists, otherwise "Purchase required" with scan_id-tagged checkout links.
+- **API scan response** now returns `totalViolations` + `severityCounts` so the widget's 4 stat boxes reflect ALL violations (details still paywalled to top 3).
+- **PDF**: pure pdf-lib, Helvetica/Courier built-ins only, no images. Verified by generating all 3 docs + the zero-violation path.
+
+### Manual tasks remaining
+
+1. **`ANTHROPIC_API_KEY` in Render env vars** — confirmed set per this session's brief; keep for Claude-enhanced PDF descriptions.
+2. Migration `003_add_business_name.sql` — confirmed already run (business_name column exists).
+3. Nothing else outstanding for the ADA tool UI/PDF.
+
+---
+
+## Previous Session: Comprehensive fix session (2026-06-12)
 
 **Goal:** Issues 1–5: scan_id linking, business name field, Claude API enhancement, landing page copy, env var reminder.
 **Status:** Complete. Type-checked clean. Committed and pushed.

@@ -131,10 +131,22 @@ export async function POST(request: Request) {
   }
 
   // ── 7. Return safe subset — never expose raw_results ─────────────────────
+  // severityCounts covers ALL violations (counts only — details stay paywalled)
+  const severityCounts = {
+    critical: scanResult.violations.filter(v => v.impact === 'critical').length,
+    serious:  scanResult.violations.filter(v => v.impact === 'serious').length,
+    moderate: scanResult.violations.filter(v => v.impact === 'moderate').length,
+    minor:    scanResult.violations.filter(
+      v => v.impact !== 'critical' && v.impact !== 'serious' && v.impact !== 'moderate',
+    ).length,
+  }
+
   return Response.json({
     scanId: saved.id,
     score,
     violations: scanResult.violations.slice(0, 3).map(toViolationSummary),
+    totalViolations: scanResult.violations.length,
+    severityCounts,
     incompleteCount: scanResult.incomplete.length,
     passCount: scanResult.passes,
     coverageNote: COVERAGE_NOTE,

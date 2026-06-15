@@ -220,7 +220,7 @@ export async function scanUrl(url: string): Promise<ScanResult> {
         // window.axe is available because we injected the source above.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).axe.run(document, {
-          runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] },
+          runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] },
         }),
       ),
       new Promise<never>((_, reject) =>
