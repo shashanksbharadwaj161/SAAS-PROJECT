@@ -1,13 +1,23 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import {
+  SEVERITY,
+  severityOf,
+  scoreColor,
+  scoreGlow,
+  scoreLabel,
+  type SeverityKey,
+  type ImpactLevel,
+} from '@/lib/severity'
+import { withScanId, type GumroadUrls } from '@/lib/gumroad'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Violation {
   id: string
   description: string
-  impact: 'critical' | 'serious' | 'moderate' | 'minor' | null
+  impact: ImpactLevel
   nodes_affected: number
   wcag_criteria: string[]
 }
@@ -23,48 +33,11 @@ interface ScanResult {
   coverageNote: string
 }
 
-interface GumroadUrls {
-  basic: string
-  premium: string
-  monitoring: string
-}
-
 interface Props {
   gumroadUrls: GumroadUrls
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SEVERITY = {
-  critical: { color: 'var(--critical)', dim: 'var(--critical-dim)' },
-  serious:  { color: 'var(--serious)',  dim: 'var(--serious-dim)' },
-  moderate: { color: 'var(--moderate)', dim: 'var(--moderate-dim)' },
-  minor:    { color: 'var(--minor)',    dim: 'var(--minor-dim)' },
-} as const
-
-type SeverityKey = keyof typeof SEVERITY
-
-function severityOf(impact: Violation['impact']): SeverityKey {
-  return impact && impact in SEVERITY ? (impact as SeverityKey) : 'minor'
-}
-
-function scoreColor(score: number): string {
-  if (score >= 80) return 'var(--success)'
-  if (score >= 60) return 'var(--warning)'
-  return 'var(--danger)'
-}
-
-function scoreGlow(score: number): string {
-  if (score >= 80) return '0 0 40px rgba(63,185,80,0.4)'
-  if (score >= 60) return '0 0 40px rgba(210,153,34,0.4)'
-  return '0 0 40px rgba(248,81,73,0.4)'
-}
-
-function scoreLabel(score: number): string {
-  if (score >= 80) return 'Good Standing'
-  if (score >= 60) return 'Needs Work'
-  return 'Critical Risk'
-}
 
 function isValidUrl(raw: string): boolean {
   try {
@@ -73,14 +46,6 @@ function isValidUrl(raw: string): boolean {
   } catch {
     return false
   }
-}
-
-// Appends scan_id to a Gumroad checkout URL. Gumroad echoes checkout URL params
-// back in the webhook payload (url_params), which is how the webhook links the
-// purchase to the scan. Handles URLs that already carry a query string.
-function withScanId(gumroadUrl: string, scanId: string): string {
-  const sep = gumroadUrl.includes('?') ? '&' : '?'
-  return `${gumroadUrl}${sep}scan_id=${encodeURIComponent(scanId)}`
 }
 
 const LOADING_STEPS = [
@@ -271,6 +236,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
             onChange={e => setBusinessName(e.target.value)}
             placeholder="Business name (optional — appears on your documents)"
             aria-label="Business name (optional — appears on your documents)"
+            maxLength={200}
             style={{ ...inputStyle, marginBottom: '10px' }}
           />
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -281,6 +247,7 @@ export default function ScanWidget({ gumroadUrls }: Props) {
               onChange={e => setUrl(e.target.value)}
               placeholder="https://yourbusiness.com"
               aria-label="Website URL to scan"
+              maxLength={2048}
               style={{ ...inputStyle, flex: '1 1 240px', width: 'auto', fontSize: '16px' }}
             />
             <button

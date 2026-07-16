@@ -2,7 +2,101 @@
 
 ---
 
-## Last Session: Premium dark UI redesign + PDF final version (2026-06-15)
+## Last Session: Full audit + fix + security hardening (2026-07-16)
+
+**Goal:** End-to-end audit of the ADA tool: fix pipeline bugs, harden security,
+polish PDFs and UI, add improvements, organize the codebase.
+**Status:** Complete. Type check clean across all workspaces. `next build` passes
+(11 routes). PDFs regenerated and visually verified. UI verified by screenshot at
+1280px and 375px. Committed per phase and pushed.
+
+### Critical bugs fixed (Phase 2)
+
+1. **scan_id never linked purchases to scans** — Gumroad sends checkout URL params
+   as Rails-style nested form keys (`url_params[scan_id]=...`), but the webhook only
+   tried `JSON.parse(body.get('url_params'))`. Now parses bracket keys, JSON-string,
+   and top-level `scan_id`, with UUID validation. This was the root cause of the
+   empty "0/100, URL not available" PDFs.
+2. **Cross-customer data leak** — the "most recent scan in 2 hours" fallback could
+   put customer A's scan data into customer B's legal document. Removed entirely.
+3. **Webhook retry loop** — `payments.sale_id` is UNIQUE; Gumroad retries hit the
+   constraint → 500 → more retries. Now: idempotency lookup by sale_id, one insert
+   retry, unique-violation handled, and EVERY response is HTTP 200 (hard rule).
+4. **Misleading "No Violations Detected ✓" PDF** for purchases with no linked scan —
+   PDFs now render an honest "NO SCAN DATA AVAILABLE" state (cover dash, amber
+   explanation on summary/violations/dev-guide pages) via `EvidenceData.noScanData`.
+5. **enhance.ts fragile JSON parsing** — Claude fences/prose killed enhancement
+   silently. Now: tolerant array extraction, per-item shape validation, difficulty
+   enum guard, 4000 max_tokens, unknown-id filtering.
+6. Tier detection fallback by product permalink (discount codes change price).
+7. Email: WCAG 2.1 → 2.2 copy; no-scan purchases get an explanation instead of a
+   fake 0/100 score; results-page link button added.
+
+### Security hardening (Phase 3)
+
+- **lib/ssrf.ts** (new): DNS-resolving public-URL validator. Blocks loopback,
+  RFC-1918, CGNAT, link-local/169.254 (cloud metadata), multicast/reserved, IPv6
+  private ranges, IPv4-mapped IPv6 (dotted + hex forms), decimal/hex IP literals,
+  `.local`/`.internal` hostnames. Unit-tested (21 cases, all pass).
+- scan.ts: removed `--disable-web-security` + `IsolateOrigins` launch flags;
+  re-validates the final URL after redirects (SSRF-via-redirect).
+- Rate limit IP now from the RIGHTMOST x-forwarded-for entry (leftmost is
+  client-spoofable → bypass). URL length capped at 2048.
+- next.config.js: CSP (self-only, inline styles allowed by design), nosniff,
+  X-Frame-Options DENY, Referrer-Policy, Permissions-Policy, HSTS.
+- Webhook: email/UUID format validation, length caps, debug payload logging removed.
+
+### PDF quality (Phase 4)
+
+- Violation card heights now match the drawn flow exactly (was ~30-40pt of dead
+  space per enhanced card).
+- Verified by rasterizing: evidence package (7pp, enhanced cards render plain-
+  English/legal-relevance/difficulty), dev guide (6pp), monitoring confirmation,
+  zero-violation success state, no-scan honesty state.
+
+### UI quality (Phase 5) — verified by screenshots at 1280px and 375px
+
+- Notice bar no longer clips on mobile (11px + secondary segments hidden).
+- Nav brand/CTA no longer overlap at 375px (`.nav-cta` mobile sizing).
+- Results scroll clears the fixed notice bar + sticky nav (scrollMarginTop).
+- Industry accent buttons got hover states; FAQ accordion got aria-controls/region.
+- Scan widget loading animation verified live (spinner + step progression).
+
+### Improvements added (Phase 6)
+
+1. "View & share full report →" link in scan results → `/results/[scanId]`.
+2. Results page re-signs PDF URLs on every load — downloads never expire.
+3. Scan errors mapped to actionable copy (unreachable/timeout/rate-limit/invalid).
+4. Delivery email: results-page button + honest no-scan notice (Phase 2).
+5. Loader shows "Typically 20–40 seconds. Keep this tab open."
+
+### Codebase organization (Phase 7)
+
+- Deleted dead Stripe checkout route (`app/api/checkout/route.ts`).
+- Removed unused deps: `stripe`, `@saas/stripe`, `@pdf-lib/fontkit` (both package.jsons);
+  `@saas/stripe` dropped from transpilePackages.
+- New shared modules: `lib/severity.ts` (severity/score helpers, was duplicated in
+  ScanWidget + ResultsView) and `lib/gumroad.ts` (env URL reads ×3 + withScanId ×2).
+- JSDoc on all exported lib/package functions. `.env.example` PDF_STORAGE_BUCKET
+  mismatch removed (bucket is `ada-pdfs`, fixed in code).
+- Input maxLength caps on scan widget fields.
+
+### Manual tasks remaining (Render)
+
+1. **Confirm `ANTHROPIC_API_KEY`** is set in Render env vars (enhanced PDF copy).
+2. **`NEXT_PUBLIC_APP_URL`** must be set to the real `.onrender.com` URL — the
+   email "View your results online" button and webhook results links depend on it.
+3. Redeploy picks up everything else automatically (`render.yaml` unchanged).
+4. **Product-integrity note:** the $149/mo Monitoring tier promises monthly
+   re-scans ("1st of each month") but no scheduler exists yet. Build the cron
+   (GitHub Actions or Render cron hitting a re-scan endpoint) before actively
+   selling Monitoring, or soften the PDF/pricing copy.
+5. Optional: verify a real Gumroad test purchase end-to-end once deployed —
+   webhook logs will show which url_params encoding Gumroad actually sends.
+
+---
+
+## Previous Session: Premium dark UI redesign + PDF final version (2026-06-15)
 
 **Goal:** Final quality pass — make the product look and work like it costs $100+. Dark premium design system across all web UI; rebuilt PDF as a legal-grade document; new results page.
 **Status:** Complete. Full `next build` passes (12 routes). Type-checked clean. Committed and pushed.

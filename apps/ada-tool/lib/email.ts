@@ -196,6 +196,11 @@ async function getDailySentCount(): Promise<number> {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
+/**
+ * Emails the buyer their PDF download links via Resend, respecting the
+ * 100/day free-tier cap. Never throws: failures are logged and recorded as
+ * status='failed' on email_deliveries so the webhook still returns 200.
+ */
 export async function sendPdfDelivery(params: PdfDeliveryParams): Promise<void> {
   const { paymentId, email, tier, pdfUrls } = params
   const db = createServiceClient()

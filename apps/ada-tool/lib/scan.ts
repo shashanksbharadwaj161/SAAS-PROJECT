@@ -36,6 +36,10 @@ function getAxeSource(): string {
 
 // ─── Error class ─────────────────────────────────────────────────────────────
 
+/**
+ * Typed scan failure. `code` maps to an HTTP status in the API route:
+ * UNREACHABLE → 422, TIMEOUT → 504, SCAN_FAILED → 500.
+ */
 export class ScanError extends Error {
   constructor(
     public readonly code: 'UNREACHABLE' | 'TIMEOUT' | 'SCAN_FAILED',
@@ -143,6 +147,14 @@ function mapRule(r: AxeRuleResult): ViolationResult {
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
+/**
+ * Runs a WCAG 2.2 AA axe-core scan against a live URL in headless Chromium.
+ *
+ * Caller MUST validate the URL first (see lib/ssrf.ts) — this function
+ * re-checks only the post-redirect landing URL.
+ *
+ * @throws ScanError for unreachable sites, timeouts, and scanner failures.
+ */
 export async function scanUrl(url: string): Promise<ScanResult> {
   // ── 1. Resolve Chromium path ─────────────────────────────────────────────
   const executablePath = await resolveExecutablePath().catch((err: Error) => {

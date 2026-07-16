@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@saas/db'
+import { getGumroadUrls, withScanId } from '@/lib/gumroad'
 import ResultsView, { type ResultViolation, type PdfDownload } from './ResultsView'
 
 // Results are private, per-scan, and read fresh from the DB on every request
@@ -30,11 +31,6 @@ const PDF_LABELS: Record<string, string> = {
   'evidence-package':        'Evidence Package',
   'developer-guide':         'Developer Remediation Guide',
   'monitoring-confirmation': 'Monitoring Confirmation',
-}
-
-function withScanId(gumroadUrl: string, scanId: string): string {
-  const sep = gumroadUrl.includes('?') ? '&' : '?'
-  return `${gumroadUrl}${sep}scan_id=${encodeURIComponent(scanId)}`
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -93,11 +89,7 @@ export default async function ResultsPage({ params }: Props) {
     purchase = { tier: payment.tier, downloads }
   }
 
-  const gumroadUrls = {
-    basic:      process.env.GUMROAD_PRODUCT_BASIC      ?? '#',
-    premium:    process.env.GUMROAD_PRODUCT_PREMIUM    ?? '#',
-    monitoring: process.env.GUMROAD_PRODUCT_MONITORING ?? '#',
-  }
+  const gumroadUrls = getGumroadUrls()
 
   return (
     <ResultsView

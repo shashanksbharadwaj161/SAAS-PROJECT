@@ -25,10 +25,12 @@ export interface TierPdf {
 
 // ─── Tier routing ─────────────────────────────────────────────────────────────
 
-// Returns the set of PDFs to generate for the given tier.
-// basic      → [evidence-package.pdf]
-// premium    → [evidence-package.pdf, developer-guide.pdf]
-// monitoring → [evidence-package.pdf, developer-guide.pdf, monitoring-confirmation.pdf]
+/**
+ * Generates the PDF set for a tier, in delivery order:
+ * basic      → [evidence-package.pdf]
+ * premium    → [evidence-package.pdf, developer-guide.pdf]
+ * monitoring → [evidence-package.pdf, developer-guide.pdf, monitoring-confirmation.pdf]
+ */
 export async function buildPdfsForTier(
   tier: 'basic' | 'premium' | 'monitoring',
   evidenceData: EvidenceData,
@@ -63,8 +65,11 @@ export async function buildPdfsForTier(
 
 // ─── Storage upload ───────────────────────────────────────────────────────────
 
-// Uploads each PDF to ada-pdfs/{payments/{paymentId}/{filename}} and returns
-// signed URLs valid for 7 days. Bucket must exist and be private.
+/**
+ * Uploads each PDF to ada-pdfs/payments/{paymentId}/{filename} and returns
+ * signed URLs valid for 7 days. The bucket must exist and be private.
+ * @throws Error when an upload or URL signing fails.
+ */
 export async function uploadPdfsForPayment(
   paymentId: string,
   pdfs: TierPdf[],
@@ -99,12 +104,14 @@ export async function uploadPdfsForPayment(
 
 // ─── Main export: generate → upload → update DB ───────────────────────────────
 
-// Full pipeline: builds PDFs for tier, uploads to Storage, writes signed URLs
-// back to payments.pdf_urls. Returns the signed URLs for use in email delivery.
-//
-// email_deliveries.status stays 'pending' here — it flips to 'sent' when Resend
-// delivers the email (implemented in the email delivery step, not this function).
-// The DB schema only has 'pending' | 'sent' | 'failed'; no intermediate state needed.
+/**
+ * Full pipeline: enhances violations via Claude (best-effort), builds PDFs for
+ * the tier, uploads to Storage, and writes signed URLs back to
+ * payments.pdf_urls. Returns the signed URLs for email delivery.
+ *
+ * email_deliveries.status stays 'pending' here — it flips to 'sent' when
+ * Resend delivers the email (see lib/email.ts).
+ */
 export async function generatePdfsForTier(
   tier: 'basic' | 'premium' | 'monitoring',
   paymentId: string,

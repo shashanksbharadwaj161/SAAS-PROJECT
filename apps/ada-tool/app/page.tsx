@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { getGumroadUrls } from '@/lib/gumroad'
 import ScanWidget from './_components/ScanWidget'
 import FaqAccordion from './_components/FaqAccordion'
 
@@ -36,11 +37,7 @@ const FAQ = [
 ]
 
 export default function HomePage() {
-  const gumroadUrls = {
-    basic:      process.env.GUMROAD_PRODUCT_BASIC      ?? '#',
-    premium:    process.env.GUMROAD_PRODUCT_PREMIUM    ?? '#',
-    monitoring: process.env.GUMROAD_PRODUCT_MONITORING ?? '#',
-  }
+  const gumroadUrls = getGumroadUrls()
 
   return (
     <main>

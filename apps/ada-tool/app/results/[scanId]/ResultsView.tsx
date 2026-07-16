@@ -1,13 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  SEVERITY,
+  severityOf,
+  scoreColor,
+  scoreGlow,
+  scoreLabel,
+  type SeverityKey,
+  type ImpactLevel,
+} from '@/lib/severity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ResultViolation {
   id: string
   description: string
-  impact: 'critical' | 'serious' | 'moderate' | 'minor' | null
+  impact: ImpactLevel
   nodes_affected: number
   wcag_criteria: string[]
 }
@@ -33,37 +42,7 @@ export interface ResultsViewProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const SEVERITY = {
-  critical: { color: 'var(--critical)', dim: 'var(--critical-dim)' },
-  serious:  { color: 'var(--serious)',  dim: 'var(--serious-dim)' },
-  moderate: { color: 'var(--moderate)', dim: 'var(--moderate-dim)' },
-  minor:    { color: 'var(--minor)',    dim: 'var(--minor-dim)' },
-} as const
-
-type SeverityKey = keyof typeof SEVERITY
 type Filter = 'all' | SeverityKey
-
-function severityOf(impact: ResultViolation['impact']): SeverityKey {
-  return impact && impact in SEVERITY ? (impact as SeverityKey) : 'minor'
-}
-
-function scoreColor(score: number): string {
-  if (score >= 80) return 'var(--success)'
-  if (score >= 60) return 'var(--warning)'
-  return 'var(--danger)'
-}
-
-function scoreGlow(score: number): string {
-  if (score >= 80) return '0 0 40px rgba(63,185,80,0.4)'
-  if (score >= 60) return '0 0 40px rgba(210,153,34,0.4)'
-  return '0 0 40px rgba(248,81,73,0.4)'
-}
-
-function scoreLabel(score: number): string {
-  if (score >= 80) return 'Good Standing'
-  if (score >= 60) return 'Needs Work'
-  return 'Critical Risk'
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -322,10 +301,8 @@ export default function ResultsView(props: ResultsViewProps) {
                   background: 'var(--bg-elevated)',
                   borderRadius: 'var(--radius-md)',
                   padding: '16px',
-                  borderLeft: `3px solid ${SEVERITY[sev].color}`,
                   border: '1px solid var(--border-subtle)',
-                  borderLeftWidth: '3px',
-                  borderLeftColor: SEVERITY[sev].color,
+                  borderLeft: `3px solid ${SEVERITY[sev].color}`,
                   marginBottom: '8px',
                 }}
               >

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { getGumroadUrls } from '@/lib/gumroad'
 import ScanWidget from '../_components/ScanWidget'
 
 // ─── Industry data ────────────────────────────────────────────────────────────
@@ -277,11 +278,7 @@ export default async function IndustryPage({ params }: Props) {
 
   if (!data) notFound()
 
-  const gumroadUrls = {
-    basic:      process.env.GUMROAD_PRODUCT_BASIC      ?? '#',
-    premium:    process.env.GUMROAD_PRODUCT_PREMIUM    ?? '#',
-    monitoring: process.env.GUMROAD_PRODUCT_MONITORING ?? '#',
-  }
+  const gumroadUrls = getGumroadUrls()
 
   return (
     <main>

@@ -1064,6 +1064,11 @@ function buildMonitoringPage(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, d
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * The primary deliverable: cover page with score + severity summary, legal
+ * notice, executive summary, and per-violation detail cards (with Claude
+ * plain-English enrichment when available). Included in every tier.
+ */
 export async function generateEvidencePackage(data: EvidenceData): Promise<Uint8Array> {
   const doc   = await PDFDocument.create()
   const fonts = await loadFonts(doc)
@@ -1079,6 +1084,10 @@ export async function generateEvidencePackage(data: EvidenceData): Promise<Uint8
   return doc.save()
 }
 
+/**
+ * Developer remediation guide: top-10 violations by severity with
+ * before/after code examples. Premium and monitoring tiers.
+ */
 export async function generateDevGuide(data: EvidenceData): Promise<Uint8Array> {
   const doc   = await PDFDocument.create()
   const fonts = await loadFonts(doc)
@@ -1090,6 +1099,7 @@ export async function generateDevGuide(data: EvidenceData): Promise<Uint8Array> 
   return doc.save()
 }
 
+/** Monitoring activation confirmation (monitoring tier only). */
 export async function generateMonitoringConfirmation(data: MonitoringData): Promise<Uint8Array> {
   const doc   = await PDFDocument.create()
   const fonts = await loadFonts(doc)
