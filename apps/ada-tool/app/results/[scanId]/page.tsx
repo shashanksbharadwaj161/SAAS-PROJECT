@@ -60,7 +60,7 @@ export default async function ResultsPage({ params }: Props) {
   // Latest purchase linked to this scan, if any
   const { data: payment } = await db
     .from('payments')
-    .select('tier, pdf_urls')
+    .select('id, tier, pdf_urls')
     .eq('scan_id', scanId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -75,11 +75,21 @@ export default async function ResultsPage({ params }: Props) {
     wcag_criteria:  v.wcagCriteria ?? [],
   }))
 
+  // Download links are re-signed on every page load so they never expire —
+  // the URLs stored in payments.pdf_urls are only a fallback if signing fails.
   let purchase: { tier: string; downloads: PdfDownload[] } | null = null
   if (payment) {
-    const downloads = Object.entries(payment.pdf_urls ?? {})
+    const keys = Object.entries(payment.pdf_urls ?? {})
       .filter(([, url]) => typeof url === 'string' && url.length > 0)
-      .map(([key, url]) => ({ label: PDF_LABELS[key] ?? key, url }))
+
+    const downloads = await Promise.all(
+      keys.map(async ([key, storedUrl]) => {
+        const { data: signed } = await db.storage
+          .from('ada-pdfs')
+          .createSignedUrl(`payments/${payment.id}/${key}.pdf`, 60 * 60) // 1 hour
+        return { label: PDF_LABELS[key] ?? key, url: signed?.signedUrl ?? storedUrl }
+      }),
+    )
     purchase = { tier: payment.tier, downloads }
   }
 

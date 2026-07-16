@@ -136,10 +136,21 @@ export default function ScanWidget({ gumroadUrls }: Props) {
       const data = await res.json() as Record<string, unknown>
 
       if (!res.ok) {
+        const serverMsg = data.error as string | undefined
         if (res.status === 429) {
-          setError('Please wait 60 seconds between scans.')
+          setError('Please wait 60 seconds between scans, then try again.')
+        } else if (res.status === 422) {
+          setError(
+            'We couldn’t reach that website. Check the address is correct and the site is online, then try again.',
+          )
+        } else if (res.status === 504) {
+          setError(
+            'The site took too long to respond. Large or slow sites can time out — try again in a moment.',
+          )
+        } else if (res.status === 400) {
+          setError(serverMsg ?? 'That doesn’t look like a scannable URL. Check the address and try again.')
         } else {
-          setError((data.error as string | undefined) ?? 'Scan failed. Please try again.')
+          setError(serverMsg ?? 'The scan hit an unexpected error. Please try again — it usually works on the second attempt.')
         }
         return
       }
@@ -238,6 +249,16 @@ export default function ScanWidget({ gumroadUrls }: Props) {
               )
             })}
           </div>
+          <div
+            style={{
+              textAlign: 'center',
+              marginTop: '20px',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Typically 20–40 seconds. Keep this tab open.
+          </div>
         </div>
       ) : (
 
@@ -303,7 +324,9 @@ export default function ScanWidget({ gumroadUrls }: Props) {
 
       {/* ── Phase 3: results ─────────────────────────────────────────────── */}
       {result && !loading && (
-        <div ref={resultsRef} style={{ marginTop: '24px' }}>
+        // scrollMarginTop keeps the score visible below the fixed notice bar +
+        // sticky nav (32px + 64px) when scrollIntoView aligns this block
+        <div ref={resultsRef} style={{ marginTop: '24px', scrollMarginTop: '110px' }}>
 
           {/* Score */}
           <div
@@ -342,6 +365,27 @@ export default function ScanWidget({ gumroadUrls }: Props) {
             </div>
             <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px', color: scoreColor(result.score) }}>
               {scoreLabel(result.score)}
+            </div>
+            <a
+              href={`/results/${result.scanId}`}
+              className="btn-outline"
+              style={{
+                display: 'inline-block',
+                marginTop: '16px',
+                border: '1px solid var(--border-strong)',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 18px',
+                fontWeight: 600,
+                fontSize: '13px',
+                textDecoration: 'none',
+              }}
+            >
+              View &amp; share full report →
+            </a>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+              Permanent link — share it with your attorney or developer.
             </div>
           </div>
 

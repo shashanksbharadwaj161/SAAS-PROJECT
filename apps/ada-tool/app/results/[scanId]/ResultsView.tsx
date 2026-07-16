@@ -170,7 +170,7 @@ export default function ResultsView(props: ResultsViewProps) {
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
               {props.purchase.tier.charAt(0).toUpperCase() + props.purchase.tier.slice(1)} package ·
-              download links valid 7 days from purchase
+              links refresh every time you open this page
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               {props.purchase.downloads.map(d => (
