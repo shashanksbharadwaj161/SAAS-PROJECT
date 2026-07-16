@@ -5,6 +5,7 @@ import chromium from '@sparticuz/chromium-min'
 import puppeteer from 'puppeteer-core'
 import { existsSync, readFileSync } from 'fs'
 import { resolve as pathResolve } from 'path'
+import { assertPublicUrl, BlockedUrlError } from './ssrf'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -149,13 +150,11 @@ export async function scanUrl(url: string): Promise<ScanResult> {
   })
 
   // ── 2. Launch browser ────────────────────────────────────────────────────
+  // NOTE: never pass --disable-web-security here — the scanned page is
+  // untrusted content and must not be able to read cross-origin responses.
   const browser = await puppeteer
     .launch({
-      args: [
-        ...chromium.args,
-        '--disable-web-security',       // allow cross-origin resources on scanned page
-        '--disable-features=IsolateOrigins,site-per-process',
-      ],
+      args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath,
       headless: chromium.headless,
@@ -206,6 +205,17 @@ export async function scanUrl(url: string): Promise<ScanResult> {
         'UNREACHABLE',
         `HTTP ${response?.status() ?? '???'} from ${url}`,
       )
+    }
+
+    // Re-validate after redirects — the initial URL may have been public but
+    // redirected the browser to an internal host (SSRF via redirect).
+    try {
+      await assertPublicUrl(new URL(page.url()))
+    } catch (err) {
+      if (err instanceof BlockedUrlError) {
+        throw new ScanError('UNREACHABLE', 'Site redirected to a blocked address')
+      }
+      throw err
     }
 
     // ── 4. Inject axe-core ─────────────────────────────────────────────────

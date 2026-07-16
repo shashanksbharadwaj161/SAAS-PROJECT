@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import { createServiceClient } from '@saas/db'
 import { scanUrl, ScanError } from '@/lib/scan'
 import { calculateScore, toViolationSummary } from '@/lib/score'
+import { assertPublicUrl, BlockedUrlError } from '@/lib/ssrf'
 
 export const maxDuration = 60
 export const runtime = 'nodejs'
@@ -12,34 +13,21 @@ export const runtime = 'nodejs'
 const COVERAGE_NOTE =
   'Automated scanning detects approximately 57% of WCAG issues. A complete accessibility audit requires manual review.'
 
-function validateUrl(raw: string): URL {
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    throw new Error('Invalid URL format')
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('URL must use http or https')
-  }
-  const blockedHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0']
-  if (
-    blockedHosts.includes(parsed.hostname) ||
-    parsed.hostname.endsWith('.local') ||
-    // Block RFC-1918 ranges in string form (best-effort; not a security boundary)
-    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(parsed.hostname)
-  ) {
-    throw new Error('Scanning local or internal addresses is not allowed')
-  }
-  return parsed
-}
+const MAX_URL_LENGTH = 2048
 
+/**
+ * Client IP for rate limiting. Uses the LAST x-forwarded-for entry: proxies
+ * append the address of the peer they accepted the connection from, so the
+ * rightmost entry was written by our own proxy (Render) and cannot be spoofed
+ * by the client — unlike the first entry, which the client controls.
+ */
 function getClientIp(request: Request): string {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    'unknown'
-  )
+  const xff = request.headers.get('x-forwarded-for')
+  if (xff) {
+    const entries = xff.split(',').map((s) => s.trim()).filter(Boolean)
+    if (entries.length > 0) return entries[entries.length - 1]!
+  }
+  return request.headers.get('x-real-ip') ?? 'unknown'
 }
 
 export async function POST(request: Request) {
@@ -61,6 +49,9 @@ export async function POST(request: Request) {
   }
 
   const rawUrl = ((body as { url: string }).url).trim()
+  if (rawUrl.length === 0 || rawUrl.length > MAX_URL_LENGTH) {
+    return Response.json({ error: 'URL must be between 1 and 2048 characters' }, { status: 400 })
+  }
 
   // Optional business name — shown on the PDF header for legal reference
   const rawBusinessName = (body as Record<string, unknown>).businessName
@@ -69,12 +60,21 @@ export async function POST(request: Request) {
       ? rawBusinessName.trim().slice(0, 200)
       : null
 
-  // ── 2. Validate URL ───────────────────────────────────────────────────────
+  // ── 2. Validate URL (syntax + SSRF: DNS-resolved public-address check) ────
   let parsedUrl: URL
   try {
-    parsedUrl = validateUrl(rawUrl)
+    parsedUrl = new URL(rawUrl)
+  } catch {
+    return Response.json({ error: 'Invalid URL format' }, { status: 400 })
+  }
+  try {
+    await assertPublicUrl(parsedUrl)
   } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 400 })
+    if (err instanceof BlockedUrlError) {
+      return Response.json({ error: err.message }, { status: 400 })
+    }
+    console.error('URL validation error:', err)
+    return Response.json({ error: 'Could not validate URL' }, { status: 400 })
   }
 
   // ── 3. Rate limit: 1 scan per IP per 60 seconds ───────────────────────────
