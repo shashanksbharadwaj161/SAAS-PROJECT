@@ -1,3 +1,11 @@
+// Gumroad ping webhook — payment → PDF generation → email delivery.
+//
+// HARD RULE: every response from this route is HTTP 200. A non-200 causes
+// Gumroad to retry the ping, and retries risk duplicate processing. Failures
+// are logged server-side and recoverable via the payments table instead.
+// Idempotency is guaranteed by the UNIQUE constraint on payments.sale_id plus
+// the explicit duplicate check below.
+
 import { createServiceClient } from '@saas/db'
 import {
   generatePdfsForTier,
@@ -17,6 +25,10 @@ const PRICE_TO_TIER: Record<number, Tier> = {
   7900:  'premium',     // $79 — evidence package + developer guide
   14900: 'monitoring',  // $149/mo — all 3 docs + ongoing monitoring
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Pragmatic email shape check — Gumroad has already validated the address.
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/
 
 // Shape of violations as stored in scans.raw_results
 interface RawViolation {
@@ -44,131 +56,188 @@ function rawToEvidenceViolations(raw: Record<string, unknown>): ViolationSummary
   }))
 }
 
-export async function POST(request: Request) {
-  const contentType = request.headers.get('content-type') ?? ''
-  if (!contentType.includes('application/x-www-form-urlencoded')) {
-    return Response.json({ error: 'Invalid content type' }, { status: 400 })
-  }
+/**
+ * Extracts the scan_id that ScanWidget appended to the Gumroad checkout URL.
+ *
+ * Gumroad echoes checkout URL params back in the ping, but the encoding varies:
+ *  1. Rails-style nested form keys:  url_params[scan_id]=<uuid>   (most common)
+ *  2. A JSON object string:          url_params={"scan_id":"<uuid>"}
+ *  3. A top-level field:             scan_id=<uuid>               (custom fields)
+ * All three are handled; the result is only accepted if it is a valid UUID.
+ */
+function extractScanId(body: FormData): string | null {
+  const candidates: Array<string | null> = []
 
-  const body = await request.formData()
+  const bracket = body.get('url_params[scan_id]')
+  if (typeof bracket === 'string') candidates.push(bracket)
 
-  const sellerId    = body.get('seller_id')    as string | null
-  const email       = body.get('email')        as string | null
-  const price       = body.get('price')        as string | null
-  const saleId      = body.get('sale_id')      as string | null
-  const orderNumber = body.get('order_number') as string | null
-  const isTest      = body.get('test')         as string | null
-  // stored for debugging / future use
-  const _productId   = body.get('product_id')   as string | null
-  const _productName = body.get('product_name') as string | null
-
-  // ── Temporary payload logging (remove after scan_id routing is confirmed) ──
-  console.log('WEBHOOK PAYLOAD KEYS:', Object.keys(Object.fromEntries(body)))
-  console.log('URL_PARAMS RAW:', body.get('url_params'))
-  console.log('REFERRER:', body.get('referrer'))
-
-  // ── Extract scan_id from Gumroad URL parameters ────────────────────────────
-  // Gumroad passes checkout URL params back as a JSON string in url_params.
-  // The scan_id is appended to each checkout link by ScanWidget after a scan.
-  let scanId: string | null = null
-  const urlParamsRaw = body.get('url_params') as string | null
-  if (urlParamsRaw) {
+  const urlParamsRaw = body.get('url_params')
+  if (typeof urlParamsRaw === 'string') {
     try {
-      const urlParams = JSON.parse(urlParamsRaw) as Record<string, string>
-      scanId = urlParams['scan_id'] ?? null
+      const parsed = JSON.parse(urlParamsRaw) as Record<string, unknown>
+      if (parsed && typeof parsed === 'object' && typeof parsed.scan_id === 'string') {
+        candidates.push(parsed.scan_id)
+      }
     } catch {
-      // url_params not valid JSON — no scan_id available
+      // Not JSON — fall through to other encodings
     }
   }
+
+  const topLevel = body.get('scan_id')
+  if (typeof topLevel === 'string') candidates.push(topLevel)
+
+  for (const c of candidates) {
+    if (c && UUID_RE.test(c.trim())) return c.trim().toLowerCase()
+  }
+  return null
+}
+
+/**
+ * Fallback tier detection by product permalink, for purchases where the price
+ * doesn't match the canonical cents values (discount codes, price changes).
+ * Permalinks are derived from the GUMROAD_PRODUCT_* env URLs (".../l/<permalink>").
+ */
+function tierFromPermalink(permalink: string | null): Tier | null {
+  if (!permalink) return null
+  const envMap: Array<[string | undefined, Tier]> = [
+    [process.env.GUMROAD_PRODUCT_BASIC,      'basic'],
+    [process.env.GUMROAD_PRODUCT_PREMIUM,    'premium'],
+    [process.env.GUMROAD_PRODUCT_MONITORING, 'monitoring'],
+  ]
+  for (const [url, tier] of envMap) {
+    const slug = url?.split('/l/')[1]?.split(/[/?#]/)[0]
+    if (slug && slug === permalink) return tier
+  }
+  return null
+}
+
+// Every exit from this route is HTTP 200 — see rule at top of file.
+function ok(bodyJson: Record<string, unknown>): Response {
+  return Response.json(bodyJson, { status: 200 })
+}
+
+export async function POST(request: Request) {
+  const contentType = request.headers.get('content-type') ?? ''
+  if (
+    !contentType.includes('application/x-www-form-urlencoded') &&
+    !contentType.includes('multipart/form-data')
+  ) {
+    return ok({ received: true, skipped: true, reason: 'invalid_content_type' })
+  }
+
+  let body: FormData
+  try {
+    body = await request.formData()
+  } catch {
+    return ok({ received: true, skipped: true, reason: 'unparseable_body' })
+  }
+
+  const sellerId    = body.get('seller_id')    as string | null
+  const email       = (body.get('email')       as string | null)?.trim().slice(0, 320) ?? null
+  const price       = body.get('price')        as string | null
+  const saleId      = (body.get('sale_id')     as string | null)?.trim().slice(0, 128) ?? null
+  const orderNumber = body.get('order_number') as string | null
+  const isTest      = body.get('test')         as string | null
+  const permalink   = (body.get('permalink') ?? body.get('product_permalink')) as string | null
+
+  const scanId = extractScanId(body)
 
   // ── Verify seller identity ────────────────────────────────────────────────
   const expectedSellerId = process.env.GUMROAD_SELLER_ID
   if (!expectedSellerId) {
-    console.error('GUMROAD_SELLER_ID env var is not set')
-    return Response.json({ error: 'Server misconfiguration' }, { status: 500 })
+    console.error('CRITICAL: GUMROAD_SELLER_ID env var is not set — webhook cannot verify sender')
+    return ok({ received: true, skipped: true, reason: 'server_misconfigured' })
   }
   if (sellerId !== expectedSellerId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 403 })
+    return ok({ received: true, skipped: true, reason: 'unrecognised_seller' })
   }
 
   // ── Skip Gumroad test purchases ───────────────────────────────────────────
   if (isTest === 'true') {
-    return Response.json({ received: true, skipped: true, reason: 'test_purchase' })
+    return ok({ received: true, skipped: true, reason: 'test_purchase' })
   }
 
   // ── Validate required fields ──────────────────────────────────────────────
-  if (!email || !saleId || !price) {
-    return Response.json({ error: 'Missing required fields: email, sale_id, price' }, { status: 400 })
+  if (!email || !EMAIL_RE.test(email) || !saleId || !price) {
+    console.warn(`Webhook missing/invalid required fields (order ${orderNumber ?? 'unknown'})`)
+    return ok({ received: true, skipped: true, reason: 'missing_required_fields' })
   }
 
-  // ── Map price to tier ─────────────────────────────────────────────────────
+  // ── Map price to tier (permalink as fallback for discounted prices) ──────
   const priceInCents = parseInt(price, 10)
-  const tier = PRICE_TO_TIER[priceInCents]
+  const tier = PRICE_TO_TIER[priceInCents] ?? tierFromPermalink(permalink)
   if (!tier) {
-    // Log unknown price but return 200 so Gumroad doesn't retry indefinitely
-    console.warn(`Unknown Gumroad price: ${priceInCents} cents (order ${orderNumber})`)
-    return Response.json({ received: true, skipped: true, reason: 'unrecognised_price' })
+    console.warn(`Unknown Gumroad price ${priceInCents}c, permalink ${permalink} (order ${orderNumber})`)
+    return ok({ received: true, skipped: true, reason: 'unrecognised_price' })
   }
 
-  // ── Write to Supabase ─────────────────────────────────────────────────────
   const db = createServiceClient()
 
-  const { data: payment, error: paymentError } = await db
+  // ── Idempotency: skip if this sale was already processed ─────────────────
+  const { data: existing } = await db
     .from('payments')
-    .insert({
-      scan_id: scanId,
-      sale_id: saleId,
-      tier,
-      email,
-      pdf_urls: {},    // populated below by generatePdfsForTier
-    })
     .select('id')
-    .single()
+    .eq('sale_id', saleId)
+    .maybeSingle()
 
+  if (existing) {
+    return ok({ received: true, skipped: true, reason: 'duplicate_sale', payment_id: existing.id })
+  }
+
+  // ── Record the payment (one retry — losing a paid sale is the worst case) ─
+  const insertPayment = () =>
+    db
+      .from('payments')
+      .insert({ scan_id: scanId, sale_id: saleId, tier, email, pdf_urls: {} })
+      .select('id')
+      .single()
+
+  let { data: payment, error: paymentError } = await insertPayment()
   if (paymentError) {
-    console.error('payments insert error:', paymentError)
-    // Return 500 so Gumroad retries the webhook on DB failure
-    return Response.json({ error: 'Database error' }, { status: 500 })
+    await new Promise((r) => setTimeout(r, 500))
+    ;({ data: payment, error: paymentError } = await insertPayment())
+  }
+
+  if (paymentError || !payment) {
+    // 23505 = unique_violation — a concurrent retry already recorded this sale.
+    if (paymentError?.code === '23505') {
+      return ok({ received: true, skipped: true, reason: 'duplicate_sale' })
+    }
+    console.error(`CRITICAL: payments insert failed for sale ${saleId}:`, paymentError?.message)
+    return ok({ received: true, error: 'payment_record_failed' })
   }
 
   const { error: deliveryError } = await db
     .from('email_deliveries')
-    .insert({
-      payment_id: payment.id,
-      email,
-      status: 'pending',
-    })
+    .insert({ payment_id: payment.id, email, status: 'pending' })
 
   if (deliveryError) {
-    // Non-fatal: payment recorded, email delivery tracked via logs
-    console.error('email_deliveries insert error:', deliveryError)
+    // Non-fatal: payment recorded; delivery tracked via logs
+    console.error('email_deliveries insert error:', deliveryError.message)
   }
 
   // ── PDF generation + email delivery ──────────────────────────────────────
-  // Wrapped in try/catch — MUST always return 200 to Gumroad.
-  // A non-200 causes Gumroad to retry, creating duplicate payment records.
   try {
-    // Look up the scan the buyer ran before purchasing, if available.
-    // scanId is appended to the Gumroad checkout URL by ScanWidget and
-    // echoed back in the webhook payload under url_params.
-    let scannedUrl    = 'URL not available'
-    let scanScore     = 0
-    let violations:   ViolationSummary[] = []
-    let passCount     = 0
+    // Look up the exact scan the buyer ran before purchasing. There is
+    // deliberately NO "most recent scan" fallback: guessing risks putting one
+    // customer's scan data into another customer's legal evidence document.
+    let scannedUrl      = 'No scan linked to this purchase'
+    let scanScore       = 0
+    let violations:     ViolationSummary[] = []
+    let passCount       = 0
     let incompleteCount = 0
-    let businessName: string | null = null
+    let businessName:   string | null = null
+    let scanLinked      = false
 
     if (scanId) {
-      // Primary path: look up the specific scan the buyer ran before purchasing
-      console.log('SCAN LOOKUP: by scan_id', scanId)
       const { data: scan, error: scanError } = await db
         .from('scans')
         .select('url, score, raw_results, business_name')
         .eq('id', scanId)
-        .single()
+        .maybeSingle()
 
       if (scanError) {
-        console.warn(`Could not fetch scan ${scanId}: ${scanError.message}`)
+        console.warn(`Scan lookup failed for ${scanId}: ${scanError.message}`)
       } else if (scan) {
         scannedUrl      = scan.url
         scanScore       = scan.score
@@ -176,27 +245,7 @@ export async function POST(request: Request) {
         violations      = rawToEvidenceViolations(scan.raw_results)
         passCount       = (scan.raw_results as RawScanResults).passes ?? 0
         incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
-      }
-    } else {
-      // Fallback: scan_id was not passed through Gumroad (url_params not echoed).
-      // Use the most recent scan in the last 2 hours as a best-effort match.
-      console.log('SCAN LOOKUP: fallback to recent (no scan_id in url_params)')
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-      const { data: scan } = await db
-        .from('scans')
-        .select('url, score, raw_results, business_name')
-        .gte('created_at', twoHoursAgo)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (scan) {
-        scannedUrl      = scan.url
-        scanScore       = scan.score
-        businessName    = scan.business_name
-        violations      = rawToEvidenceViolations(scan.raw_results)
-        passCount       = (scan.raw_results as RawScanResults).passes ?? 0
-        incompleteCount = ((scan.raw_results as RawScanResults).incomplete ?? []).length
+        scanLinked      = true
       }
     }
 
@@ -209,6 +258,7 @@ export async function POST(request: Request) {
       violations,
       passCount,
       incompleteCount,
+      noScanData:     !scanLinked,
     }
 
     const monitoringData: MonitoringData | undefined =
@@ -216,26 +266,23 @@ export async function POST(request: Request) {
         ? { url: scannedUrl, activationDate: new Date(), email }
         : undefined
 
-    const signedUrls = await generatePdfsForTier(
-      tier,
-      payment.id,
-      evidenceData,
-      monitoringData,
-    )
+    const signedUrls = await generatePdfsForTier(tier, payment.id, evidenceData, monitoringData)
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
     await sendPdfDelivery({
-      paymentId: payment.id,
+      paymentId:  payment.id,
       email,
       tier,
-      pdfUrls:   signedUrls,
+      pdfUrls:    signedUrls,
       scanScore,
+      hasScan:    scanLinked,
+      resultsUrl: scanLinked && appUrl ? `${appUrl}/results/${scanId}` : null,
     })
-
   } catch (err) {
-    // Pipeline failure is non-fatal to Gumroad. Payment is recorded.
-    // Manual retry possible via /api/generate-pdf (to be added in S9).
+    // Pipeline failure is non-fatal to Gumroad — payment is recorded and the
+    // PDFs can be regenerated from the payments row.
     console.error(`PDF/email pipeline failed for payment ${payment.id}:`, err)
   }
 
-  return Response.json({ received: true, payment_id: payment.id })
+  return ok({ received: true, payment_id: payment.id })
 }

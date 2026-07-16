@@ -87,7 +87,7 @@ const LOADING_STEPS = [
   'Loading your website',
   'Injecting WCAG scanner',
   'Running 50+ accessibility checks',
-  'Calculating compliance score',
+  'Calculating accessibility score',
 ]
 
 // Step advance times (ms from scan start) — tuned to typical scan duration

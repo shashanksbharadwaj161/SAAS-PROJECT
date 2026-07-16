@@ -3,7 +3,7 @@ import './design-tokens.css'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'ADA Compliance Assessment Tool',
+  title: 'ADA Evidence Tool — WCAG Technical Evidence Package',
   description:
     'Technical evidence package for websites — not legal advice. WCAG 2.2 AA analysis for ADA demand letter response.',
 }

@@ -56,6 +56,11 @@ export interface EvidenceData {
   enhancedViolations?: EnhancedViolation[]
   passCount: number
   incompleteCount: number
+  /**
+   * true when the purchase could not be linked to a scan. The document then
+   * explains how to obtain scan results instead of implying a clean scan ran.
+   */
+  noScanData?: boolean
 }
 
 export interface MonitoringData {
@@ -461,11 +466,11 @@ function buildCoverPage(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, data: 
     x: col2, y: cardTop - 94, size: 11, font: fonts.regular, color: C.textDark,
   })
 
-  // 4. Score circle
+  // 4. Score circle — shows a dash + explanation when no scan is linked
   const cx = W / 2
   const cy = H - 455
   const r  = 60
-  const sc = scoreColor(data.score)
+  const sc = data.noScanData ? C.muted : scoreColor(data.score)
 
   page.drawEllipse({
     x: cx, y: cy, xScale: r, yScale: r,
@@ -473,21 +478,29 @@ function buildCoverPage(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, data: 
     borderColor: sc, borderWidth: 4, borderOpacity: 1,
   })
 
-  const scoreStr = String(data.score)
-  const sw  = fonts.bold.widthOfTextAtSize(scoreStr, 42)
-  const sufW = fonts.regular.widthOfTextAtSize('/100', 18)
-  const x0 = cx - (sw + 4 + sufW) / 2
-  page.drawText(scoreStr, { x: x0, y: cy - 14, size: 42, font: fonts.bold, color: sc })
-  page.drawText('/100', { x: x0 + sw + 4, y: cy - 14, size: 18, font: fonts.regular, color: C.faint })
+  if (data.noScanData) {
+    const dash = '—'
+    page.drawText(dash, {
+      x: cx - fonts.bold.widthOfTextAtSize(dash, 42) / 2,
+      y: cy - 14, size: 42, font: fonts.bold, color: sc,
+    })
+  } else {
+    const scoreStr = String(data.score)
+    const sw  = fonts.bold.widthOfTextAtSize(scoreStr, 42)
+    const sufW = fonts.regular.widthOfTextAtSize('/100', 18)
+    const x0 = cx - (sw + 4 + sufW) / 2
+    page.drawText(scoreStr, { x: x0, y: cy - 14, size: 42, font: fonts.bold, color: sc })
+    page.drawText('/100', { x: x0 + sw + 4, y: cy - 14, size: 18, font: fonts.regular, color: C.faint })
+  }
 
-  const label = scoreLabel(data.score)
+  const label = data.noScanData ? 'NO SCAN DATA AVAILABLE' : scoreLabel(data.score)
   page.drawText(label, {
     x: cx - fonts.bold.widthOfTextAtSize(label, 11) / 2,
     y: cy - r - 24,
     size: 11, font: fonts.bold, color: sc,
   })
 
-  // 5. Violation summary boxes
+  // 5. Violation summary boxes (dashes when no scan data — 0s would mislead)
   const counts: Array<{ label: string; color: PdfColor; n: number }> = [
     { label: 'Critical', color: C.critical, n: data.violations.filter(v => v.impact === 'critical').length },
     { label: 'Serious',  color: C.serious,  n: data.violations.filter(v => v.impact === 'serious').length },
@@ -499,11 +512,13 @@ function buildCoverPage(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, data: 
   const boxXs  = [M, M + 126, M + 252, M + 378]
   counts.forEach((item, i) => {
     const bx = boxXs[i]!
+    const boxColor = data.noScanData ? C.muted : item.color
     drawRoundedRect(page, bx, boxTop, 120, 70, 6, {
-      color: dim(item.color), borderColor: item.color, borderWidth: 1,
+      color: dim(boxColor), borderColor: boxColor, borderWidth: 1,
     })
-    page.drawText(String(item.n), { x: bx + 14, y: boxTop - 34, size: 24, font: fonts.bold, color: item.color })
-    page.drawText(item.label,     { x: bx + 14, y: boxTop - 54, size: 9,  font: fonts.regular, color: C.muted })
+    const value = data.noScanData ? '—' : String(item.n)
+    page.drawText(value, { x: bx + 14, y: boxTop - 34, size: 24, font: fonts.bold, color: boxColor })
+    page.drawText(item.label, { x: bx + 14, y: boxTop - 54, size: 9,  font: fonts.regular, color: C.muted })
   })
 
   // 6. Footer disclaimer band
@@ -565,6 +580,28 @@ function buildSummaryPage(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, data
   let y = CONTENT_TOP - 24
   page.drawText('Executive Summary', { x: M, y, size: 24, font: fonts.bold, color: C.navy })
   y -= 36
+
+  // No scan linked — replace the score/stats with an honest explanation
+  if (data.noScanData) {
+    const msg =
+      'This purchase could not be linked to a website scan. No score or violation statistics ' +
+      'are available. Run the free scan on our website, then reply to your delivery email with ' +
+      'your scan link to receive a regenerated document containing your actual scan results.'
+    const msgLines = wrapText(msg, fonts.regular, 11, CW - 40)
+    const boxH = 44 + msgLines.length * 17
+    drawRoundedRect(page, M, y, CW, boxH, 8, {
+      color: C.amberBg, borderColor: C.warning, borderWidth: 1,
+    })
+    page.drawText('NO SCAN DATA AVAILABLE', {
+      x: M + 20, y: y - 26, size: 12, font: fonts.bold, color: C.amberFg,
+    })
+    let my = y - 48
+    for (const line of msgLines) {
+      page.drawText(line, { x: M + 20, y: my, size: 11, font: fonts.regular, color: C.amberTxt })
+      my -= 17
+    }
+    return
+  }
 
   // Score box — prominent, full width
   const boxH = 72
@@ -641,6 +678,29 @@ function buildViolationPages(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, d
   let y    = CONTENT_TOP - 24
   page.drawText('Violations Detail', { x: M, y, size: 24, font: fonts.bold, color: C.navy })
   y -= 36
+
+  // No scan linked — explain honestly instead of implying a clean scan ran
+  if (data.noScanData) {
+    const msg =
+      'This purchase could not be linked to a website scan, so no violation data is available. ' +
+      'To obtain your scan results: run the free scan on our website, then reply to your delivery ' +
+      'email with your scan link — we will regenerate this document with your results at no charge. ' +
+      'This document does NOT indicate that your website passed any accessibility checks.'
+    const msgLines = wrapText(msg, fonts.regular, 11, CW - 40)
+    const boxH = 44 + msgLines.length * 17
+    drawRoundedRect(page, M, y, CW, boxH, 8, {
+      color: C.amberBg, borderColor: C.warning, borderWidth: 1,
+    })
+    page.drawText('NO SCAN DATA AVAILABLE', {
+      x: M + 20, y: y - 26, size: 12, font: fonts.bold, color: C.amberFg,
+    })
+    let my = y - 48
+    for (const line of msgLines) {
+      page.drawText(line, { x: M + 20, y: my, size: 11, font: fonts.regular, color: C.amberTxt })
+      my -= 17
+    }
+    return
+  }
 
   // No violations — success state (checkmark drawn with lines; WinAnsi has no U+2713)
   if (shown.length === 0) {
@@ -843,6 +903,28 @@ function buildDevGuidePages(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, da
   y = CONTENT_TOP - 24
   page.drawText('Remediation Instructions', { x: M, y, size: 24, font: fonts.bold, color: C.navy })
   y -= 40
+
+  // Nothing to remediate — say why instead of rendering an empty page
+  if (top10.length === 0) {
+    const msg = data.noScanData
+      ? 'This purchase could not be linked to a website scan, so there are no violations to ' +
+        'remediate in this guide. Run the free scan on our website and reply to your delivery ' +
+        'email with your scan link to receive a regenerated guide based on your actual results.'
+      : 'The automated scan found no WCAG violations to remediate. Manual testing by an ' +
+        'accessibility specialist is still recommended, as automated tools detect ' +
+        'approximately 57% of WCAG issues.'
+    const msgLines = wrapText(msg, fonts.regular, 11, CW - 40)
+    const boxH = 24 + msgLines.length * 17
+    drawRoundedRect(page, M, y, CW, boxH, 8, {
+      color: C.bgPage, borderColor: C.border, borderWidth: 1,
+    })
+    let my = y - 24
+    for (const line of msgLines) {
+      page.drawText(line, { x: M + 20, y: my, size: 11, font: fonts.regular, color: C.textMid })
+      my -= 17
+    }
+    return
+  }
 
   const bgBad  = rgb(0.996, 0.949, 0.949)  // #fef2f2
   const bgGood = rgb(0.941, 0.992, 0.957)  // #f0fdf4
