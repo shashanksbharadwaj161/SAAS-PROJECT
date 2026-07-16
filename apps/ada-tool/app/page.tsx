@@ -47,6 +47,7 @@ export default function HomePage() {
 
       {/* ── 1. Legal notice bar ───────────────────────────────────────────── */}
       <div
+        className="notice-bar"
         style={{
           position: 'fixed',
           top: 0,
@@ -70,7 +71,7 @@ export default function HomePage() {
         <span>
           ⚠ Technical assessment only — not legal advice
           <span className="notice-bar-mid"> · axe-core identifies ~57% of WCAG 2.2 issues</span>
-          {' '}· Always consult a qualified attorney
+          <span className="notice-bar-end"> · Always consult a qualified attorney</span>
         </span>
       </div>
 
@@ -92,12 +93,12 @@ export default function HomePage() {
           marginTop: '32px',
         }}
       >
-        <span style={{ color: 'var(--accent)', fontSize: '18px', fontWeight: 700 }}>
+        <span className="nav-brand" style={{ color: 'var(--accent)', fontSize: '18px', fontWeight: 700 }}>
           ⬡ ADA Evidence
         </span>
         <a
           href="#scan"
-          className="btn-nav"
+          className="btn-nav nav-cta"
           style={{
             background: 'var(--accent)',
             color: '#fff',

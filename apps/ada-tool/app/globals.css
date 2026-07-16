@@ -51,6 +51,10 @@ a {
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 
+.nav-cta {
+  white-space: nowrap;
+}
+
 .btn-nav {
   transition: all 0.2s;
 }
@@ -185,8 +189,22 @@ a {
   font-size: clamp(40px, 7vw, 72px);
 }
 
-.notice-bar-mid {
+.notice-bar-mid,
+.notice-bar-end {
   display: inline;
+}
+
+.nav-brand {
+  white-space: nowrap;
+}
+
+/* Industry pages use per-industry accent colors — generic brightness hover */
+.btn-accent {
+  transition: filter 0.2s, box-shadow 0.2s;
+}
+.btn-accent:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 @media (max-width: 640px) {
@@ -215,7 +233,21 @@ a {
     font-size: clamp(32px, 8vw, 48px);
   }
 
-  .notice-bar-mid {
+  /* Keep the legal core visible; drop secondary segments so nothing clips */
+  .notice-bar {
+    font-size: 11px;
+  }
+  .notice-bar-mid,
+  .notice-bar-end {
     display: none;
+  }
+
+  .nav-brand {
+    font-size: 16px;
+  }
+
+  .nav-cta {
+    font-size: 13px !important;
+    padding: 8px 12px !important;
   }
 }

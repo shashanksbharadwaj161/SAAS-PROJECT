@@ -288,6 +288,7 @@ export default async function IndustryPage({ params }: Props) {
 
       {/* ── Legal notice bar ────────────────────────────────────────────────── */}
       <div
+        className="notice-bar"
         style={{
           position: 'fixed',
           top: 0,
@@ -311,7 +312,7 @@ export default async function IndustryPage({ params }: Props) {
         <span>
           ⚠ Technical assessment only — not legal advice
           <span className="notice-bar-mid"> · axe-core identifies ~57% of WCAG 2.2 issues</span>
-          {' '}· Always consult a qualified attorney
+          <span className="notice-bar-end"> · Always consult a qualified attorney</span>
         </span>
       </div>
 
@@ -333,11 +334,12 @@ export default async function IndustryPage({ params }: Props) {
           marginTop: '32px',
         }}
       >
-        <a href="/" style={{ color: 'var(--accent)', fontSize: '18px', fontWeight: 700, textDecoration: 'none' }}>
+        <a href="/" className="nav-brand" style={{ color: 'var(--accent)', fontSize: '18px', fontWeight: 700, textDecoration: 'none' }}>
           ⬡ ADA Evidence
         </a>
         <a
           href="#scan"
+          className="btn-accent nav-cta"
           style={{
             background: data.accent,
             color: '#fff',
@@ -548,6 +550,7 @@ export default async function IndustryPage({ params }: Props) {
         </p>
         <a
           href="#scan"
+          className="btn-accent"
           style={{
             display: 'inline-block',
             background: data.accent,

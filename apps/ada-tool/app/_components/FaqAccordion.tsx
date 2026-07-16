@@ -29,6 +29,7 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
               className="faq-q"
               onClick={() => setOpen(isOpen ? null : i)}
               aria-expanded={isOpen}
+              aria-controls={`faq-answer-${i}`}
               style={{
                 width: '100%',
                 padding: '20px 24px',
@@ -57,6 +58,8 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
             </button>
             {isOpen && (
               <div
+                id={`faq-answer-${i}`}
+                role="region"
                 style={{
                   padding: '0 24px 20px',
                   color: 'var(--text-secondary)',
