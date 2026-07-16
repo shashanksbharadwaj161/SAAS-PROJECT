@@ -749,10 +749,11 @@ function buildViolationPages(doc: PDFDocument, pages: PDFPage[], fonts: Fonts, d
     const biLines = enhanced ? wrapText(enhanced.businessImpact, fonts.regular, 12, innerW - 32) : []
     const peBoxH  = peLines.length > 0 ? 34 + peLines.length * 16 : 0
     const biBoxH  = biLines.length > 0 ? 34 + biLines.length * 16 : 0
-    const diffH   = enhanced ? 30 : 0
 
-    const bodyH = PAD + titleLines.length * 17 + (wcagLine ? 16 : 0) +
-      (peBoxH ? peBoxH + 12 : 0) + (biBoxH ? biBoxH + 10 : 0) + diffH + PAD
+    // Mirrors the drawing flow below exactly: 26 body-start offset, then each
+    // block's net vertical consumption, then 14 bottom padding.
+    const bodyH = 26 + titleLines.length * 17 + (wcagLine ? 16 : 0) +
+      (peBoxH ? peBoxH + 2 : 0) + biBoxH + (enhanced ? 18 : 0) + 14
     const cardH = HEADER_H + bodyH
 
     // Page break
