@@ -229,7 +229,27 @@ export default function ScanWidget({ gumroadUrls }: Props) {
 
         /* ── Phase 1: input ─────────────────────────────────────────────── */
         <form onSubmit={handleScan}>
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ color: 'var(--accent-bright)', fontSize: '12px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                Free technical assessment
+              </span>
+              <span aria-hidden="true" style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--border-strong)' }} />
+              <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>Usually 20–40 seconds</span>
+            </div>
+            <h2 style={{ fontSize: '22px', letterSpacing: '-0.03em', lineHeight: 1.15, margin: '0 0 8px', fontWeight: 800 }}>
+              See your site through an accessibility lens.
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6, margin: 0 }}>
+              Start with a WCAG 2.2 scan. We’ll show your score, priority issues, and what needs manual review.
+            </p>
+          </div>
+
+          <label htmlFor="business-name" style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 650, marginBottom: '7px' }}>
+            Business name <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span>
+          </label>
           <input
+            id="business-name"
             type="text"
             className="input-dark"
             value={businessName}
@@ -239,14 +259,22 @@ export default function ScanWidget({ gumroadUrls }: Props) {
             maxLength={200}
             style={{ ...inputStyle, marginBottom: '10px' }}
           />
+          <label htmlFor="site-url" style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 650, margin: '10px 0 7px' }}>
+            Website to scan
+          </label>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <input
-              type="text"
+              id="site-url"
+              type="url"
               className="input-dark"
               value={url}
               onChange={e => setUrl(e.target.value)}
               placeholder="https://yourbusiness.com"
               aria-label="Website URL to scan"
+              aria-describedby="scan-privacy"
+              autoComplete="url"
+              inputMode="url"
+              required
               maxLength={2048}
               style={{ ...inputStyle, flex: '1 1 240px', width: 'auto', fontSize: '16px' }}
             />
@@ -268,6 +296,11 @@ export default function ScanWidget({ gumroadUrls }: Props) {
             >
               Scan My Site Free
             </button>
+          </div>
+          <div id="scan-privacy" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: '14px', color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.5 }}>
+            <span>✓ No account required</span>
+            <span>✓ Results are private by link</span>
+            <span>✓ Technical assessment — not legal advice</span>
           </div>
         </form>
       )}

@@ -183,6 +183,7 @@ a {
 
 .scan-card {
   padding: 28px;
+  overflow: hidden;
 }
 
 .hero-h1 {

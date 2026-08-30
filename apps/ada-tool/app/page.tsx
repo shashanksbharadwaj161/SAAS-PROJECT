@@ -180,8 +180,8 @@ export default function HomePage() {
           }}
         >
           Just faster than the other businesses he&apos;s chasing. Get timestamped
-          WCAG technical evidence — the good faith documentation that resolves
-          80% of demand letters.
+          WCAG technical evidence — good-faith documentation your attorney can
+          review as part of your response strategy.
         </p>
 
         <div id="scan" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'left' }}>
