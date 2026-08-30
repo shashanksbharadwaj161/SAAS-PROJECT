@@ -138,6 +138,8 @@ export async function POST(request: Request) {
   const saleId      = (body.get('sale_id')     as string | null)?.trim().slice(0, 128) ?? null
   const orderNumber = body.get('order_number') as string | null
   const isTest      = body.get('test')         as string | null
+  const subscriptionId = (body.get('subscription_id') as string | null)?.trim().slice(0, 128) ?? null
+  const subscriptionEnded = body.get('subscription_ended_at') ?? body.get('subscription_cancelled_at') ?? body.get('subscription_failed_at')
   const permalink   = (body.get('permalink') ?? body.get('product_permalink')) as string | null
 
   const scanId = extractScanId(body)
@@ -214,6 +216,25 @@ export async function POST(request: Request) {
   if (deliveryError) {
     // Non-fatal: payment recorded; delivery tracked via logs
     console.error('email_deliveries insert error:', deliveryError.message)
+  }
+
+  // Keep one durable monitoring record per Gumroad membership, rather than one
+  // per renewal sale. A missing subscription id means the Gumroad product was
+  // configured incorrectly as a one-time product, but remains safe to process.
+  if (tier === 'monitoring') {
+    const status = subscriptionEnded ? 'ended' : 'active'
+    const subscriptionKey = subscriptionId || `sale:${saleId}`
+    const { error: monitoringError } = await db
+      .from('monitoring_subscriptions')
+      .upsert({
+        subscription_id: subscriptionKey,
+        scan_id: scanId,
+        email,
+        status,
+        next_scan_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'subscription_id' })
+    if (monitoringError) console.error('monitoring subscription upsert failed:', monitoringError.message)
   }
 
   // ── PDF generation + email delivery ──────────────────────────────────────

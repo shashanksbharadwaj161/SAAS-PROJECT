@@ -75,6 +75,35 @@ export interface Database {
         Relationships: []
       }
 
+      monitoring_subscriptions: {
+        Row: {
+          id: string
+          subscription_id: string
+          scan_id: string | null
+          email: string
+          status: 'active' | 'cancelled' | 'ended' | 'failed'
+          next_scan_at: string
+          last_scanned_at: string | null
+          latest_score: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          subscription_id: string
+          scan_id?: string | null
+          email: string
+          status?: 'active' | 'cancelled' | 'ended' | 'failed'
+          next_scan_at?: string
+          last_scanned_at?: string | null
+          latest_score?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['monitoring_subscriptions']['Insert']>
+        Relationships: []
+      }
+
       shops: {
         Row: {
           id: string

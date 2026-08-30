@@ -261,3 +261,22 @@ export async function sendPdfDelivery(params: PdfDeliveryParams): Promise<void> 
       })
   }
 }
+
+/** Sends the promised monitoring alert when a scheduled scan falls below 70. */
+export async function sendMonitoringAlert(params: { email: string; url: string; score: number; scanId: string }): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+  const resultsUrl = appUrl ? `${appUrl}/results/${params.scanId}` : null
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
+  try {
+    const { error } = await resend.emails.send({
+      from: `ADA Evidence Tool <${fromEmail}>`,
+      to: params.email,
+      subject: 'Accessibility monitoring alert: score below 70',
+      html: `<p>Your scheduled accessibility scan for <strong>${params.url}</strong> scored <strong>${params.score}/100</strong>.</p><p>This is an automated technical assessment, not legal advice. Review the result and consult a qualified accessibility professional or attorney as appropriate.</p>${resultsUrl ? `<p><a href="${resultsUrl}">View the full scan results</a></p>` : ''}`,
+    })
+    if (error) throw new Error(error.message)
+  } catch (err) {
+    console.error('sendMonitoringAlert failed:', err)
+  }
+}
