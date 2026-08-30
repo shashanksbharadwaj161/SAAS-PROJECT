@@ -3,7 +3,9 @@ services:
     name: ada-tool
     runtime: node
     plan: free
-    buildCommand: apt-get update && apt-get install -y chromium-browser && npm ci && npm run build:ada
+    # Free instances use a read-only system image; Chromium is fetched on first
+    # scan by @sparticuz/chromium-min into the writable temporary directory.
+    buildCommand: npm ci && npm run build:ada
     startCommand: cd apps/ada-tool && npm start
     envVars:
       - key: NODE_ENV

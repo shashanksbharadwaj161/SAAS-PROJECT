@@ -108,14 +108,12 @@ async function resolveExecutablePath(): Promise<string> {
   const packUrl = process.env.CHROMIUM_PACK_URL ?? CHROMIUM_DEFAULT_PACK
 
   // ── Render persistent server ───────────────────────────────────────────────
-  // Render sets RENDER=true automatically. Prefer system Chromium installed
-  // during build (apt-get install -y chromium-browser) — no cold-start download.
+  // Render's free image is read-only. Prefer a system Chromium when one is
+  // available, otherwise the package downloads its pinned pack to /tmp.
   if (process.env.RENDER) {
     const sys = findSystemChrome()
     if (sys) return sys
-    // System Chromium not installed — fall back to pack download.
-    // Add `apt-get install -y chromium-browser` to render.yaml buildCommand
-    // to avoid this path on every server start.
+    // System Chromium is not available on free Render instances.
     return chromium.executablePath(packUrl)
   }
 
