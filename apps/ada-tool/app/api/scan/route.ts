@@ -79,7 +79,19 @@ export async function POST(request: Request) {
 
   // ── 3. Rate limit: 1 scan per IP per 60 seconds ───────────────────────────
   const ipHash = createHash('sha256').update(getClientIp(request)).digest('hex')
-  const db = createServiceClient()
+  // Fail before launching Chromium when the persistence layer is unavailable.
+  // This keeps a deployment misconfiguration from looking like a network error
+  // to a visitor and avoids spending free-instance CPU on an unsaveable scan.
+  let db: ReturnType<typeof createServiceClient>
+  try {
+    db = createServiceClient()
+  } catch (err) {
+    console.error('Supabase configuration error:', err)
+    return Response.json(
+      { error: 'The scanning service is being configured. Please try again shortly.' },
+      { status: 503 },
+    )
+  }
 
   const { data: recentScan } = await db
     .from('scans')
