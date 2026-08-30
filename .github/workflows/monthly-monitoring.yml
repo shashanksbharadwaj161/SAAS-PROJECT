@@ -1,0 +1,21 @@
+name: Run ADA monitoring scans
+
+on:
+  schedule:
+    - cron: '10 0 1 * *'
+  workflow_dispatch:
+
+jobs:
+  scan-due-monitoring-sites:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run protected monitoring endpoint
+        env:
+          ADA_APP_URL: ${{ secrets.ADA_APP_URL }}
+          ADA_CRON_SECRET: ${{ secrets.ADA_CRON_SECRET }}
+        run: |
+          test -n "$ADA_APP_URL"
+          test -n "$ADA_CRON_SECRET"
+          curl --fail --show-error --silent \
+            -X POST "$ADA_APP_URL/api/cron/monitoring" \
+            -H "Authorization: Bearer $ADA_CRON_SECRET"
